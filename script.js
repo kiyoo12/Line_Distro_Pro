@@ -3,6 +3,7 @@
 // =============================================
 const memberList = document.getElementById('memberList');
 let memberDurations = {}, memberColors = {}, memberPhotos = {};
+let memberIntervals = {}; // Simpan referensi interval per member
 let chartInstance = null;
 
 // =============================================
@@ -27,26 +28,25 @@ function renderMemberCard(n, c, p, d, index) {
         </div>`;
     memberList.appendChild(card);
 
-    let interval = null;
     const holdBtn = card.querySelector('.btn-hold');
     const timeSpan = card.querySelector('.member-time');
 
     function startHold() {
-        if (interval) return;
+        if (memberIntervals[n]) return;
         card.classList.add('is-active');
         holdBtn.classList.add('holding');
         const startTime = Date.now();
         const startDuration = memberDurations[n] || 0;
-        interval = setInterval(() => {
+        memberIntervals[n] = setInterval(() => {
             memberDurations[n] = startDuration + ((Date.now() - startTime) / 1000);
             timeSpan.innerText = memberDurations[n].toFixed(1) + 's';
         }, 50);
     }
 
     function stopHold() {
-        if (!interval) return;
-        clearInterval(interval);
-        interval = null;
+        if (!memberIntervals[n]) return;
+        clearInterval(memberIntervals[n]);
+        memberIntervals[n] = null;
         card.classList.remove('is-active');
         holdBtn.classList.remove('holding');
     }
@@ -89,21 +89,27 @@ function reloadMemberList() {
 }
 
 function resetMember(n) {
+    if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
     memberDurations[n] = 0;
     reloadMemberList();
 }
 
 function deleteMember(n) {
     if (!confirm(`Hapus member "${n}"?`)) return;
+    if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
     delete memberDurations[n];
     delete memberColors[n];
     delete memberPhotos[n];
+    delete memberIntervals[n];
     reloadMemberList();
 }
 
 function resetAll() {
     if (!confirm("Reset semua durasi ke 0?")) return;
-    Object.keys(memberDurations).forEach(n => memberDurations[n] = 0);
+    Object.keys(memberDurations).forEach(n => {
+        if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
+        memberDurations[n] = 0;
+    });
     reloadMemberList();
 }
 
