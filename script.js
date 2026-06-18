@@ -68,7 +68,8 @@ function renderMemberCard(n, c, p, d, index) {
 function addNewMember() {
     const n = document.getElementById('memberName').value.trim();
     if (!n) return alert("Nama member tidak boleh kosong!");
-    if (memberDurations[n] !== undefined) return alert("Member dengan nama ini sudah ada!");
+    const duplicate = Object.keys(memberDurations).some(k => k.toLowerCase() === n.toLowerCase());
+    if (duplicate) return alert(`Member "${n}" sudah ada!`);
 
     memberDurations[n] = 0;
     memberColors[n] = document.getElementById('memberColor').value;
@@ -96,11 +97,13 @@ function resetMember(n) {
 
 function deleteMember(n) {
     if (!confirm(`Hapus member "${n}"?`)) return;
-    if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
-    delete memberDurations[n];
-    delete memberColors[n];
-    delete memberPhotos[n];
-    delete memberIntervals[n];
+    // Clear interval kalau masih jalan
+    if (memberIntervals[n]) { clearInterval(memberIntervals[n]); }
+    // Hapus semua state member ini
+    memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== n));
+    memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== n));
+    memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== n));
+    memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== n));
     reloadMemberList();
 }
 
