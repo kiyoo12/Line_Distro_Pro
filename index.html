@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LineDistro Pro</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>LineDistro Pro 📊</h1>
+    <div class="setup-box">
+        <div class="input-group">
+            <input type="text" id="songTitle" placeholder="Judul Lagu...">
+            <input type="text" id="ytLink" placeholder="Link YouTube...">
+            <button onclick="loadVideo()">Muat YouTube</button>
+            <label class="file-label">
+                📁 Import MP4/Audio
+                <input type="file" id="mediaUpload" accept="video/mp4,audio/*" onchange="loadLocalMedia(this)">
+            </label>
+        </div>
+        <div class="input-group">
+            <select id="presetSelect" onchange="loadSelectedPreset()"><option value="">-- Pilih Preset --</option></select>
+            <button onclick="saveNewPreset()">💾 Simpan Preset</button>
+            <button onclick="deleteSelectedPreset()" class="btn-del-preset">🗑️ Hapus Preset</button>
+        </div>
+        <div class="input-group">
+            <input type="text" id="memberName" placeholder="Nama Member...">
+            <input type="color" id="memberColor" value="#ff6b6b">
+            <label class="file-label">
+                🖼️ Foto
+                <input type="file" id="memberPhoto" accept="image/*">
+            </label>
+            <button onclick="addNewMember()">+ Tambah</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="left-panel">
+            <div id="player"></div>
+            <video id="localMedia" controls style="display:none; width: 100%; border-radius: 8px;"></video>
+            <audio id="audioPlayer" controls style="display:none; width: 100%;"></audio>
+            <p id="mediaLabel" style="text-align:center; margin-top:8px; color:#888; font-size:13px;"></p>
+        </div>
+        <div class="right-panel">
+            <div class="member-list" id="memberList"></div>
+            <p id="emptyHint" style="color:#555; text-align:center; margin-top:20px;">Belum ada member. Tambahkan di atas ☝️</p>
+        </div>
+    </div>
+
+    <div class="bottom-bar">
+        <button onclick="finish()" class="btn-finish">✅ Selesai & Hitung</button>
+        <button onclick="resetAll()" class="btn-reset-all">🔄 Reset Semua</button>
+    </div>
+
+    <!-- Modal Edit Member -->
+    <div id="editModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h2>✏️ Edit Member</h2>
+            <select id="editMemberSelect" onchange="populateEditForm()">
+                <option value="">-- Pilih Member --</option>
+            </select>
+            <input type="text" id="editMemberName" placeholder="Nama baru...">
+            <input type="color" id="editMemberColor" value="#ff6b6b">
+            <label class="file-label">
+                🖼️ Ganti Foto
+                <input type="file" id="editMemberPhoto" accept="image/*">
+            </label>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button onclick="applyEdit()" style="flex:1; background:#00d4ff; color:#000;">Simpan</button>
+                <button onclick="closeEditModal()" style="flex:1;">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Hasil -->
+    <div id="resultModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h2>📊 Hasil Line Distribution</h2>
+            <p id="resultSongTitle" style="color:#888; margin-bottom:10px;"></p>
+            <div id="leaderboard"></div>
+            <canvas id="resultChart" style="margin-top:20px;"></canvas>
+            <button onclick="closeResultModal()" style="margin-top:15px; width:100%;">Tutup</button>
+        </div>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
