@@ -1,30 +1,109 @@
-// =============================================
+// ══════════════════════════════════════════
 //  STATE
-// =============================================
+// ══════════════════════════════════════════
 const memberList = document.getElementById('memberList');
 let memberDurations = {}, memberColors = {}, memberPhotos = {};
-let memberIntervals = {}; // Simpan referensi interval per member
+let memberIntervals = {};
 let chartInstance = null;
 
-// =============================================
+// ══════════════════════════════════════════
+//  TOAST (pengganti alert)
+// ══════════════════════════════════════════
+function showToast(msg, duration = 2800) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    requestAnimationFrame(() => t.classList.add('show'));
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => {
+        t.classList.remove('show');
+        setTimeout(() => t.style.display = 'none', 300);
+    }, duration);
+}
+
+// ══════════════════════════════════════════
+//  CONFIRM MODAL (pengganti confirm/alert)
+// ══════════════════════════════════════════
+let _confirmCallback = null;
+
+function showConfirm({ icon = '⚠️', title = 'Konfirmasi', msg = '', okLabel = 'Ya', okClass = 'btn-danger', onOk }) {
+    document.getElementById('confirmIcon').textContent = icon;
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMsg').textContent = msg;
+    const okBtn = document.getElementById('confirmOkBtn');
+    okBtn.textContent = okLabel;
+    okBtn.className = okClass;
+    _confirmCallback = onOk;
+    document.getElementById('confirmModal').style.display = 'flex';
+}
+
+function closeConfirm() {
+    document.getElementById('confirmModal').style.display = 'none';
+    _confirmCallback = null;
+}
+
+function confirmOk() {
+    document.getElementById('confirmModal').style.display = 'none';
+    if (_confirmCallback) _confirmCallback();
+    _confirmCallback = null;
+}
+
+document.getElementById('confirmOkBtn').addEventListener('click', confirmOk);
+
+// ══════════════════════════════════════════
+//  PROMPT MODAL (pengganti prompt)
+// ══════════════════════════════════════════
+let _promptCallback = null;
+
+function showPrompt({ icon = '✏️', title = '', sub = '', placeholder = '', onOk }) {
+    document.getElementById('promptTitle').textContent = title;
+    document.getElementById('promptSub').textContent = sub;
+    const inp = document.getElementById('promptInput');
+    inp.placeholder = placeholder;
+    inp.value = '';
+    _promptCallback = onOk;
+    document.getElementById('promptModal').style.display = 'flex';
+    setTimeout(() => inp.focus(), 100);
+}
+
+function closePrompt() {
+    document.getElementById('promptModal').style.display = 'none';
+    _promptCallback = null;
+}
+
+function confirmPrompt() {
+    const val = document.getElementById('promptInput').value.trim();
+    if (!val) { showToast('⚠️ Nama tidak boleh kosong'); return; }
+    closePrompt();
+    if (_promptCallback) _promptCallback(val);
+}
+
+document.getElementById('promptInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmPrompt();
+    if (e.key === 'Escape') closePrompt();
+});
+
+// ══════════════════════════════════════════
 //  1. RENDER MEMBER CARD
-// =============================================
+// ══════════════════════════════════════════
 function renderMemberCard(n, c, p, d, index) {
     const card = document.createElement('div');
     card.className = 'member-card';
-    card.style.borderLeft = `5px solid ${c}`;
-    card.style.setProperty('--pulse-color', c + '88');
+    card.style.borderLeftColor = c;
+    card.style.setProperty('--pulse-color', c + '66');
     card.dataset.name = n;
     card.innerHTML = `
         <div class="member-info">
-            <img src="${p}" class="member-avatar" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}'">
-            <span class="member-name">${n}</span>
-            <span class="member-time">${d.toFixed(1)}s</span>
+            <img src="${p}" class="member-avatar" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
+            <div>
+                <div class="member-name">${n}</div>
+                <span class="member-time" id="time-${CSS.escape(n)}">${d.toFixed(1)}s</span>
+            </div>
         </div>
         <div class="member-actions">
-            <button class="btn-hold" style="background:${c}">[${index + 1}] Tahan</button>
-            <button class="btn-reset" onclick="resetMember('${n}')">🔄</button>
-            <button class="btn-del" onclick="deleteMember('${n}')">✖</button>
+            <button class="btn-hold" style="background:${c}" title="Tahan untuk rekam [${index+1}]">[${index+1}] Tahan</button>
+            <button class="btn-sm" onclick="resetMember('${n}')" title="Reset durasi">↺</button>
+            <button class="btn-sm del" onclick="confirmDeleteMember('${n}')" title="Hapus member">✕</button>
         </div>`;
     memberList.appendChild(card);
 
@@ -38,8 +117,8 @@ function renderMemberCard(n, c, p, d, index) {
         const startTime = Date.now();
         const startDuration = memberDurations[n] || 0;
         memberIntervals[n] = setInterval(() => {
-            memberDurations[n] = startDuration + ((Date.now() - startTime) / 1000);
-            timeSpan.innerText = memberDurations[n].toFixed(1) + 's';
+            memberDurations[n] = startDuration + (Date.now() - startTime) / 1000;
+            timeSpan.textContent = memberDurations[n].toFixed(1) + 's';
         }, 50);
     }
 
@@ -51,40 +130,41 @@ function renderMemberCard(n, c, p, d, index) {
         holdBtn.classList.remove('holding');
     }
 
-    // Mouse events (desktop)
     holdBtn.addEventListener('mousedown', startHold);
     holdBtn.addEventListener('mouseup', stopHold);
     holdBtn.addEventListener('mouseleave', stopHold);
-
-    // Touch events (HP/tablet)
-    holdBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(); }, { passive: false });
-    holdBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopHold(); }, { passive: false });
+    holdBtn.addEventListener('touchstart', e => { e.preventDefault(); startHold(); }, { passive: false });
+    holdBtn.addEventListener('touchend',   e => { e.preventDefault(); stopHold(); },  { passive: false });
     holdBtn.addEventListener('touchcancel', stopHold);
 }
 
-// =============================================
+// ══════════════════════════════════════════
 //  2. TAMBAH & KELOLA MEMBER
-// =============================================
+// ══════════════════════════════════════════
 function addNewMember() {
     const n = document.getElementById('memberName').value.trim();
-    if (!n) return alert("Nama member tidak boleh kosong!");
-    const duplicate = Object.keys(memberDurations).some(k => k.toLowerCase() === n.toLowerCase());
-    if (duplicate) return alert(`Member "${n}" sudah ada!`);
+    if (!n) { showToast('⚠️ Nama member tidak boleh kosong'); return; }
+    const dup = Object.keys(memberDurations).some(k => k.toLowerCase() === n.toLowerCase());
+    if (dup) { showToast(`⚠️ Member "${n}" sudah ada`); return; }
 
     memberDurations[n] = 0;
-    memberColors[n] = document.getElementById('memberColor').value;
+    memberColors[n]    = document.getElementById('memberColor').value;
     const f = document.getElementById('memberPhoto').files[0];
-    memberPhotos[n] = f ? URL.createObjectURL(f) : `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random`;
+    memberPhotos[n] = f
+        ? URL.createObjectURL(f)
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random&color=fff`;
 
-    document.getElementById('memberName').value = '';
+    document.getElementById('memberName').value  = '';
     document.getElementById('memberPhoto').value = '';
     reloadMemberList();
+    showToast(`✅ ${n} ditambahkan`);
 }
 
 function reloadMemberList() {
     memberList.innerHTML = '';
     const names = Object.keys(memberDurations);
-    document.getElementById('emptyHint').style.display = names.length === 0 ? 'block' : 'none';
+    const hint = document.getElementById('emptyHint');
+    hint.style.display = names.length === 0 ? 'flex' : 'none';
     names.forEach((n, i) => renderMemberCard(n, memberColors[n], memberPhotos[n], memberDurations[n], i));
     refreshEditDropdown();
 }
@@ -93,46 +173,66 @@ function resetMember(n) {
     if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
     memberDurations[n] = 0;
     reloadMemberList();
+    showToast(`↺ Reset ${n}`);
+}
+
+function confirmDeleteMember(n) {
+    showConfirm({
+        icon: '🗑',
+        title: `Hapus ${n}?`,
+        msg: 'Durasi yang sudah direkam akan hilang.',
+        okLabel: 'Hapus',
+        okClass: 'btn-danger',
+        onOk: () => deleteMember(n)
+    });
 }
 
 function deleteMember(n) {
-    if (!confirm(`Hapus member "${n}"?`)) return;
-    // Clear interval kalau masih jalan
-    if (memberIntervals[n]) { clearInterval(memberIntervals[n]); }
-    // Hapus semua state member ini
+    if (memberIntervals[n]) clearInterval(memberIntervals[n]);
     memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== n));
     memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== n));
     memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== n));
     memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== n));
     reloadMemberList();
+    showToast(`🗑 ${n} dihapus`);
 }
 
-function resetAll() {
-    if (!confirm("Reset semua durasi ke 0?")) return;
-    Object.keys(memberDurations).forEach(n => {
-        if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
-        memberDurations[n] = 0;
+function confirmResetAll() {
+    if (Object.keys(memberDurations).length === 0) { showToast('⚠️ Belum ada member'); return; }
+    showConfirm({
+        icon: '↺',
+        title: 'Reset semua durasi?',
+        msg: 'Semua waktu rekaman akan kembali ke 0.',
+        okLabel: 'Reset',
+        okClass: 'btn-primary',
+        onOk: () => {
+            Object.keys(memberDurations).forEach(n => {
+                if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
+                memberDurations[n] = 0;
+            });
+            reloadMemberList();
+            showToast('↺ Semua durasi direset');
+        }
     });
-    reloadMemberList();
 }
 
-// =============================================
-//  3. EDIT MEMBER (Modal)
-// =============================================
+// ══════════════════════════════════════════
+//  3. EDIT MEMBER
+// ══════════════════════════════════════════
 function refreshEditDropdown() {
     const sel = document.getElementById('editMemberSelect');
-    const current = sel.value;
-    sel.innerHTML = '<option value="">-- Pilih Member --</option>';
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— Pilih member —</option>';
     Object.keys(memberDurations).forEach(n => {
-        const opt = document.createElement('option');
-        opt.value = n;
-        opt.textContent = n;
-        sel.appendChild(opt);
+        const o = document.createElement('option');
+        o.value = n; o.textContent = n;
+        sel.appendChild(o);
     });
-    if (current && memberDurations[current] !== undefined) sel.value = current;
+    if (cur && memberDurations[cur] !== undefined) sel.value = cur;
 }
 
 function openEditMenu() {
+    if (Object.keys(memberDurations).length === 0) { showToast('⚠️ Belum ada member'); return; }
     refreshEditDropdown();
     document.getElementById('editModal').style.display = 'flex';
 }
@@ -144,8 +244,8 @@ function closeEditModal() {
 function populateEditForm() {
     const n = document.getElementById('editMemberSelect').value;
     if (!n) return;
-    document.getElementById('editMemberName').value = n;
-    document.getElementById('editMemberColor').value = memberColors[n] || '#ff6b6b';
+    document.getElementById('editMemberName').value  = n;
+    document.getElementById('editMemberColor').value = memberColors[n] || '#a78bfa';
 }
 
 function applyEdit() {
@@ -154,17 +254,18 @@ function applyEdit() {
     const newColor = document.getElementById('editMemberColor').value;
     const newPhotoFile = document.getElementById('editMemberPhoto').files[0];
 
-    if (!oldName) return alert("Pilih member dulu!");
-    if (!newName) return alert("Nama tidak boleh kosong!");
+    if (!oldName) { showToast('⚠️ Pilih member dulu'); return; }
+    if (!newName) { showToast('⚠️ Nama tidak boleh kosong'); return; }
 
-    // Rename kalau namanya berubah
     if (newName !== oldName) {
         memberDurations[newName] = memberDurations[oldName];
-        memberColors[newName] = newColor;
-        memberPhotos[newName] = newPhotoFile ? URL.createObjectURL(newPhotoFile) : memberPhotos[oldName];
-        delete memberDurations[oldName];
-        delete memberColors[oldName];
-        delete memberPhotos[oldName];
+        memberColors[newName]    = newColor;
+        memberPhotos[newName]    = newPhotoFile ? URL.createObjectURL(newPhotoFile) : memberPhotos[oldName];
+        if (memberIntervals[oldName]) { memberIntervals[newName] = memberIntervals[oldName]; }
+        memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== oldName));
+        memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== oldName));
+        memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== oldName));
+        memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== oldName));
     } else {
         memberColors[oldName] = newColor;
         if (newPhotoFile) memberPhotos[oldName] = URL.createObjectURL(newPhotoFile);
@@ -172,242 +273,220 @@ function applyEdit() {
 
     closeEditModal();
     reloadMemberList();
+    showToast(`✅ ${newName} diperbarui`);
 }
 
-// =============================================
-//  4. PRESET (localStorage)
-// =============================================
-function getPresets() {
-    return JSON.parse(localStorage.getItem('linedistro_presets') || '{}');
-}
-
-function savePresets(data) {
-    localStorage.setItem('linedistro_presets', JSON.stringify(data));
-}
+// ══════════════════════════════════════════
+//  4. PRESET
+// ══════════════════════════════════════════
+function getPresets() { return JSON.parse(localStorage.getItem('linedistro_presets') || '{}'); }
+function savePresets(d) { localStorage.setItem('linedistro_presets', JSON.stringify(d)); }
 
 function refreshPresetDropdown() {
     const sel = document.getElementById('presetSelect');
     const presets = getPresets();
-    sel.innerHTML = '<option value="">-- Pilih Preset --</option>';
+    sel.innerHTML = '<option value="">— Pilih preset —</option>';
     Object.keys(presets).forEach(name => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        sel.appendChild(opt);
+        const o = document.createElement('option');
+        o.value = name; o.textContent = name;
+        sel.appendChild(o);
     });
 }
 
 function saveNewPreset() {
     const members = Object.keys(memberDurations);
-    if (members.length === 0) return alert("Tambahkan member dulu sebelum menyimpan preset!");
-    const name = prompt("Nama preset:");
-    if (!name || !name.trim()) return;
-
-    const presets = getPresets();
-    presets[name.trim()] = members.map(n => ({
-        name: n,
-        color: memberColors[n],
-        photo: memberPhotos[n]
-    }));
-    savePresets(presets);
-    refreshPresetDropdown();
-    alert(`Preset "${name.trim()}" berhasil disimpan!`);
+    if (members.length === 0) { showToast('⚠️ Tambahkan member dulu'); return; }
+    showPrompt({
+        icon: '💾',
+        title: 'Simpan Preset',
+        sub: 'Beri nama untuk preset ini.',
+        placeholder: 'Nama preset...',
+        onOk: (name) => {
+            const presets = getPresets();
+            presets[name] = members.map(n => ({ name: n, color: memberColors[n], photo: memberPhotos[n] }));
+            savePresets(presets);
+            refreshPresetDropdown();
+            showToast(`💾 Preset "${name}" disimpan`);
+        }
+    });
 }
 
 function loadSelectedPreset() {
     const name = document.getElementById('presetSelect').value;
     if (!name) return;
-    const presets = getPresets();
-    const preset = presets[name];
+    const preset = getPresets()[name];
     if (!preset) return;
 
+    const doLoad = () => {
+        memberDurations = {}; memberColors = {}; memberPhotos = {};
+        preset.forEach(m => {
+            memberDurations[m.name] = 0;
+            memberColors[m.name]    = m.color || '#a78bfa';
+            memberPhotos[m.name]    = m.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=random`;
+        });
+        reloadMemberList();
+        showToast(`✅ Preset "${name}" dimuat`);
+    };
+
     if (Object.keys(memberDurations).length > 0) {
-        if (!confirm("Memuat preset akan menghapus member saat ini. Lanjutkan?")) {
-            document.getElementById('presetSelect').value = '';
-            return;
-        }
+        showConfirm({
+            icon: '📂',
+            title: `Muat "${name}"?`,
+            msg: 'Member saat ini akan diganti dengan preset ini.',
+            okLabel: 'Muat',
+            okClass: 'btn-primary',
+            onOk: doLoad
+        });
+    } else {
+        doLoad();
     }
-
-    memberDurations = {};
-    memberColors = {};
-    memberPhotos = {};
-
-    preset.forEach(m => {
-        memberDurations[m.name] = 0;
-        memberColors[m.name] = m.color || '#ff6b6b';
-        memberPhotos[m.name] = m.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=random`;
-    });
-
-    reloadMemberList();
 }
 
 function deleteSelectedPreset() {
     const name = document.getElementById('presetSelect').value;
-    if (!name) return alert("Pilih preset yang ingin dihapus!");
-    if (!confirm(`Hapus preset "${name}"?`)) return;
-    const presets = getPresets();
-    delete presets[name];
-    savePresets(presets);
-    refreshPresetDropdown();
+    if (!name) { showToast('⚠️ Pilih preset dulu'); return; }
+    showConfirm({
+        icon: '🗑',
+        title: `Hapus preset "${name}"?`,
+        msg: 'Preset ini akan dihapus permanen.',
+        okLabel: 'Hapus',
+        okClass: 'btn-danger',
+        onOk: () => {
+            const presets = getPresets();
+            delete presets[name];
+            savePresets(presets);
+            refreshPresetDropdown();
+            showToast(`🗑 Preset "${name}" dihapus`);
+        }
+    });
 }
 
-// =============================================
-//  5. LOAD MEDIA (FIX: MP4 & Audio)
-// =============================================
+// ══════════════════════════════════════════
+//  5. MEDIA
+// ══════════════════════════════════════════
 function loadLocalMedia(input) {
     const file = input.files[0];
     if (!file) return;
-
     const url = URL.createObjectURL(file);
-    const videoEl = document.getElementById('localMedia');
-    const audioEl = document.getElementById('audioPlayer');
-    const playerEl = document.getElementById('player');
-    const label = document.getElementById('mediaLabel');
-
-    // Sembunyikan YouTube player
-    playerEl.style.display = 'none';
-    videoEl.style.display = 'none';
-    audioEl.style.display = 'none';
-
+    const vid = document.getElementById('localMedia');
+    const aud = document.getElementById('audioPlayer');
+    const yt  = document.getElementById('player');
+    const lbl = document.getElementById('mediaLabel');
+    yt.style.display = 'none'; vid.style.display = 'none'; aud.style.display = 'none';
     if (file.type.startsWith('video/')) {
-        videoEl.src = url;
-        videoEl.style.display = 'block';
-        videoEl.load();
-        label.textContent = `🎬 ${file.name}`;
+        vid.src = url; vid.style.display = 'block'; vid.load();
+        lbl.textContent = `🎬 ${file.name}`;
     } else if (file.type.startsWith('audio/')) {
-        audioEl.src = url;
-        audioEl.style.display = 'block';
-        audioEl.load();
-        label.textContent = `🎵 ${file.name}`;
+        aud.src = url; aud.style.display = 'block'; aud.load();
+        lbl.textContent = `🎵 ${file.name}`;
     } else {
-        alert("Format file tidak didukung!");
+        showToast('⚠️ Format tidak didukung');
     }
 }
 
-// =============================================
-//  6. YOUTUBE PLAYER
-// =============================================
 function loadVideo() {
     const url = document.getElementById('ytLink').value.trim();
     const v = (url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&]{11})/))?.[1];
-    if (!v) return alert("Link YouTube tidak valid!");
-
-    // Sembunyikan local media
+    if (!v) { showToast('⚠️ Link YouTube tidak valid'); return; }
     document.getElementById('localMedia').style.display = 'none';
     document.getElementById('audioPlayer').style.display = 'none';
-    document.getElementById('player').style.display = 'block';
     document.getElementById('mediaLabel').textContent = '';
-
-    if (window.ytPlayer) {
-        window.ytPlayer.loadVideoById(v);
-    } else {
-        window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v });
-    }
+    const yt = document.getElementById('player');
+    yt.style.display = 'block';
+    if (window.ytPlayer) { window.ytPlayer.loadVideoById(v); }
+    else { window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v }); }
 }
 
-// =============================================
-//  7. SELESAI & HITUNG (Pie Chart + Leaderboard)
-// =============================================
+// ══════════════════════════════════════════
+//  6. FINISH & CHART
+// ══════════════════════════════════════════
 function finish() {
     const names = Object.keys(memberDurations);
-    if (names.length === 0) return alert("Belum ada member!");
+    if (names.length === 0) { showToast('⚠️ Belum ada member'); return; }
+    const total = Object.values(memberDurations).reduce((a, b) => a + b, 0);
+    if (total === 0) { showToast('⚠️ Semua durasi masih 0, rekam dulu!'); return; }
 
-    const totalDuration = Object.values(memberDurations).reduce((a, b) => a + b, 0);
-    if (totalDuration === 0) return alert("Semua durasi masih 0! Rekam dulu ya.");
-
-    // Urutkan dari terbanyak
-    const sorted = names.slice().sort((a, b) => memberDurations[b] - memberDurations[a]);
+    const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
+    const title  = document.getElementById('songTitle').value.trim() || 'Tanpa Judul';
 
     // Leaderboard
     const lb = document.getElementById('leaderboard');
     lb.innerHTML = '';
     sorted.forEach((n, i) => {
-        const pct = ((memberDurations[n] / totalDuration) * 100).toFixed(1);
-        const item = document.createElement('div');
+        const pct  = ((memberDurations[n] / total) * 100).toFixed(1);
+        const badge = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+        const item  = document.createElement('div');
         item.className = 'rank-item';
-        item.style.borderLeft = `5px solid ${memberColors[n]}`;
+        item.style.borderLeftColor = memberColors[n];
         item.innerHTML = `
             <div class="rank-name">
-                <img src="${memberPhotos[n]}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
-                <span>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`} ${n}</span>
+                <img src="${memberPhotos[n]}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;"
+                     onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}'">
+                <span class="rank-badge">${badge}</span>
+                <span>${n}</span>
             </div>
-            <div>
+            <div class="rank-meta">
                 <span class="rank-time">${memberDurations[n].toFixed(1)}s</span>
-                <span style="color:#888; margin-left:8px;">${pct}%</span>
+                <span class="rank-pct">${pct}%</span>
             </div>`;
         lb.appendChild(item);
     });
 
-    // Judul lagu
-    const title = document.getElementById('songTitle').value.trim();
-    document.getElementById('resultSongTitle').textContent = title ? `🎵 ${title}` : `🎵 Tanpa Judul`;
+    document.getElementById('resultSongTitle').textContent = `🎵 ${title}`;
+    document.getElementById('resultDateLabel').textContent = new Date().toLocaleString('id-ID');
 
-    // Pie Chart
     if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(document.getElementById('resultChart'), {
         type: 'doughnut',
         data: {
             labels: sorted,
             datasets: [{
-                data: sorted.map(n => memberDurations[n].toFixed(1)),
+                data: sorted.map(n => memberDurations[n].toFixed(2)),
                 backgroundColor: sorted.map(n => memberColors[n]),
-                borderColor: '#121212',
-                borderWidth: 2
+                borderColor: '#13131f',
+                borderWidth: 3
             }]
         },
         options: {
             plugins: {
-                legend: { labels: { color: '#e0e0e0' } },
+                legend: { labels: { color: '#9490b0', font: { family: 'Inter', size: 12 }, boxWidth: 14 } },
                 tooltip: {
                     callbacks: {
-                        label: (ctx) => {
-                            const val = ctx.parsed;
-                            const pct = ((val / totalDuration) * 100).toFixed(1);
-                            return ` ${val}s (${pct}%)`;
+                        label: ctx => {
+                            const pct = ((ctx.parsed / total) * 100).toFixed(1);
+                            return ` ${ctx.parsed}s  (${pct}%)`;
                         }
                     }
                 }
-            }
+            },
+            cutout: '60%'
         }
     });
 
-    // Simpan ke riwayat
-    const title = document.getElementById('songTitle').value.trim();
-    saveToHistory(title, sorted, memberDurations, memberColors, memberPhotos, totalDuration);
-
+    saveToHistory(title, sorted, memberDurations, memberColors, memberPhotos, total);
     document.getElementById('resultModal').style.display = 'flex';
 }
 
-function closeResultModal() {
-    document.getElementById('resultModal').style.display = 'none';
-}
-// =============================================
-//  HISTORY (Riwayat)
-// =============================================
-function getHistory() {
-    return JSON.parse(localStorage.getItem('linedistro_history') || '[]');
-}
+function closeResultModal() { document.getElementById('resultModal').style.display = 'none'; }
 
-function saveHistory(data) {
-    localStorage.setItem('linedistro_history', JSON.stringify(data));
-}
+// ══════════════════════════════════════════
+//  7. HISTORY
+// ══════════════════════════════════════════
+function getHistory()  { return JSON.parse(localStorage.getItem('linedistro_history') || '[]'); }
+function saveHistory(d){ localStorage.setItem('linedistro_history', JSON.stringify(d)); }
 
-function saveToHistory(title, sorted, durations, colors, photos, totalDuration) {
+function saveToHistory(title, sorted, durations, colors, photos, total) {
     const history = getHistory();
-    const entry = {
+    history.unshift({
         id: Date.now(),
-        title: title || 'Tanpa Judul',
+        title,
         date: new Date().toLocaleString('id-ID'),
-        totalDuration: totalDuration,
+        totalDuration: total,
         members: sorted.map(n => ({
-            name: n,
-            duration: durations[n],
-            color: colors[n],
-            photo: photos[n],
-            pct: ((durations[n] / totalDuration) * 100).toFixed(1)
+            name: n, duration: durations[n], color: colors[n], photo: photos[n],
+            pct: ((durations[n] / total) * 100).toFixed(1)
         }))
-    };
-    history.unshift(entry); // terbaru di atas
+    });
     saveHistory(history);
 }
 
@@ -417,40 +496,46 @@ function openHistory() {
     container.innerHTML = '';
 
     if (history.length === 0) {
-        container.innerHTML = '<p style="color:#555; text-align:center; margin-top:20px;">Belum ada riwayat.</p>';
+        container.innerHTML = '<p style="color:var(--text3);text-align:center;padding:30px 0;font-size:13px;">Belum ada riwayat.</p>';
     } else {
         history.forEach(entry => {
             const card = document.createElement('div');
             card.className = 'history-card';
+            const badge = i => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
             card.innerHTML = `
                 <div class="history-card-header" onclick="toggleHistoryDetail(${entry.id})">
                     <div>
-                        <div class="history-title">🎵 ${entry.title}</div>
-                        <div class="history-date">${entry.date} &nbsp;·&nbsp; Total: ${entry.totalDuration.toFixed(1)}s</div>
+                        <div class="history-card-title">🎵 ${entry.title}</div>
+                        <div class="history-card-meta">${entry.date} · Total ${entry.totalDuration.toFixed(1)}s</div>
                     </div>
-                    <div style="display:flex; gap:8px; align-items:center;">
+                    <div style="display:flex;align-items:center;gap:6px;">
                         <div class="history-avatars">
                             ${entry.members.slice(0, 4).map(m =>
-                                `<img src="${m.photo}" title="${m.name}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'"/>`
+                                `<img src="${m.photo}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'"/>`
                             ).join('')}
                             ${entry.members.length > 4 ? `<span class="history-more">+${entry.members.length - 4}</span>` : ''}
                         </div>
-                        <span class="history-chevron" id="chev-${entry.id}">▼</span>
+                        <span class="history-chevron" id="chev-${entry.id}">▾</span>
                     </div>
                 </div>
-                <div class="history-detail" id="detail-${entry.id}" style="display:none;">
-                    ${entry.members.map((m, i) => `
-                        <div class="rank-item" style="border-left: 5px solid ${m.color}; margin-bottom:6px;">
-                            <div class="rank-name">
-                                <img src="${m.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'">
-                                <span>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i+1)} ${m.name}</span>
-                            </div>
-                            <div>
-                                <span class="rank-time">${m.duration.toFixed(1)}s</span>
-                                <span style="color:#888; margin-left:8px;">${m.pct}%</span>
-                            </div>
-                        </div>`).join('')}
-                    <button onclick="deleteHistoryEntry(${entry.id})" class="btn-del" style="width:100%; margin-top:8px;">🗑️ Hapus Riwayat Ini</button>
+                <div class="history-detail" id="detail-${entry.id}">
+                    <div style="padding-top:10px; display:flex; flex-direction:column; gap:6px;">
+                        ${entry.members.map((m, i) => `
+                            <div class="rank-item" style="border-left-color:${m.color};">
+                                <div class="rank-name">
+                                    <img src="${m.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;"
+                                         onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'">
+                                    <span class="rank-badge">${badge(i)}</span>
+                                    <span>${m.name}</span>
+                                </div>
+                                <div class="rank-meta">
+                                    <span class="rank-time">${m.duration.toFixed(1)}s</span>
+                                    <span class="rank-pct">${m.pct}%</span>
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                    <button class="btn-danger-soft" style="width:100%;justify-content:center;margin-top:10px;"
+                            onclick="confirmDeleteHistoryEntry(${entry.id})">🗑 Hapus Riwayat Ini</button>
                 </div>`;
             container.appendChild(card);
         });
@@ -461,78 +546,70 @@ function openHistory() {
 
 function toggleHistoryDetail(id) {
     const detail = document.getElementById(`detail-${id}`);
-    const chev = document.getElementById(`chev-${id}`);
-    const isOpen = detail.style.display !== 'none';
-    detail.style.display = isOpen ? 'none' : 'block';
-    chev.textContent = isOpen ? '▼' : '▲';
+    const chev   = document.getElementById(`chev-${id}`);
+    const isOpen = detail.classList.contains('open');
+    detail.classList.toggle('open', !isOpen);
+    chev.classList.toggle('open', !isOpen);
 }
 
-function deleteHistoryEntry(id) {
-    if (!confirm("Hapus riwayat ini?")) return;
-    const history = getHistory().filter(e => e.id !== id);
-    saveHistory(history);
-    openHistory();
+function confirmDeleteHistoryEntry(id) {
+    showConfirm({
+        icon: '🗑', title: 'Hapus riwayat ini?',
+        msg: 'Data rekaman ini tidak bisa dikembalikan.',
+        okLabel: 'Hapus', okClass: 'btn-danger',
+        onOk: () => {
+            saveHistory(getHistory().filter(e => e.id !== id));
+            openHistory();
+            showToast('🗑 Riwayat dihapus');
+        }
+    });
 }
 
-function clearAllHistory() {
-    if (!confirm("Hapus semua riwayat?")) return;
-    saveHistory([]);
-    openHistory();
+function confirmClearHistory() {
+    showConfirm({
+        icon: '🗑', title: 'Hapus semua riwayat?',
+        msg: 'Seluruh riwayat rekaman akan dihapus permanen.',
+        okLabel: 'Hapus Semua', okClass: 'btn-danger',
+        onOk: () => { saveHistory([]); openHistory(); showToast('🗑 Semua riwayat dihapus'); }
+    });
 }
 
-function closeHistoryModal() {
-    document.getElementById('historyModal').style.display = 'none';
-}
+function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
 
-
-// =============================================
-//  8. SHORTCUT KEYBOARD
-// =============================================
-document.addEventListener('keydown', (e) => {
+// ══════════════════════════════════════════
+//  8. KEYBOARD SHORTCUTS
+// ══════════════════════════════════════════
+document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
     if (e.code === 'Space') {
         e.preventDefault();
-        const video = document.getElementById('localMedia');
-        const audio = document.getElementById('audioPlayer');
-        if (video.style.display !== 'none') {
-            video.paused ? video.play() : video.pause();
-        } else if (audio.style.display !== 'none') {
-            audio.paused ? audio.play() : audio.pause();
-        } else if (window.ytPlayer) {
-            window.ytPlayer.getPlayerState() === 1
-                ? window.ytPlayer.pauseVideo()
-                : window.ytPlayer.playVideo();
-        }
+        const vid = document.getElementById('localMedia');
+        const aud = document.getElementById('audioPlayer');
+        if (vid.style.display !== 'none') { vid.paused ? vid.play() : vid.pause(); }
+        else if (aud.style.display !== 'none') { aud.paused ? aud.play() : aud.pause(); }
+        else if (window.ytPlayer) { window.ytPlayer.getPlayerState() === 1 ? window.ytPlayer.pauseVideo() : window.ytPlayer.playVideo(); }
         return;
     }
-
     const idx = parseInt(e.key) - 1;
     const btns = document.querySelectorAll('.btn-hold');
-    if (idx >= 0 && idx < btns.length) {
-        btns[idx].dispatchEvent(new MouseEvent('mousedown'));
-    }
+    if (idx >= 0 && idx < btns.length) btns[idx].dispatchEvent(new MouseEvent('mousedown'));
 });
 
-document.addEventListener('keyup', (e) => {
+document.addEventListener('keyup', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     const idx = parseInt(e.key) - 1;
     const btns = document.querySelectorAll('.btn-hold');
-    if (idx >= 0 && idx < btns.length) {
-        btns[idx].dispatchEvent(new MouseEvent('mouseup'));
-    }
+    if (idx >= 0 && idx < btns.length) btns[idx].dispatchEvent(new MouseEvent('mouseup'));
 });
 
-// Tutup modal kalau klik di luar
-window.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal')) {
-        e.target.style.display = 'none';
-    }
+// Tutup modal klik backdrop
+document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; });
 });
 
-// =============================================
+// ══════════════════════════════════════════
 //  9. INIT
-// =============================================
+// ══════════════════════════════════════════
 window.onload = () => {
     refreshPresetDropdown();
     reloadMemberList();
