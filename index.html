@@ -51,6 +51,7 @@
     <div class="bottom-bar">
         <button onclick="finish()" class="btn-finish">✅ Selesai & Hitung</button>
         <button onclick="resetAll()" class="btn-reset-all">🔄 Reset Semua</button>
+        <button onclick="openHistory()" class="btn-history">📋 Riwayat</button>
     </div>
 
     <!-- Modal Edit Member -->
@@ -81,6 +82,18 @@
             <div id="leaderboard"></div>
             <canvas id="resultChart" style="margin-top:20px;"></canvas>
             <button onclick="closeResultModal()" style="margin-top:15px; width:100%;">Tutup</button>
+        </div>
+    </div>
+
+    <!-- Modal Riwayat -->
+    <div id="historyModal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:560px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h2>📋 Riwayat</h2>
+                <button onclick="clearAllHistory()" class="btn-del" style="font-size:12px; padding:6px 12px;">🗑️ Hapus Semua</button>
+            </div>
+            <div id="historyList"></div>
+            <button onclick="closeHistoryModal()" style="margin-top:15px; width:100%;">Tutup</button>
         </div>
     </div>
 
