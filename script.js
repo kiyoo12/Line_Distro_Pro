@@ -340,7 +340,7 @@ function finish() {
 
     // Judul lagu
     const title = document.getElementById('songTitle').value.trim();
-    document.getElementById('resultSongTitle').textContent = title ? `🎵 ${title}` : '';
+    document.getElementById('resultSongTitle').textContent = title ? `🎵 ${title}` : `🎵 Tanpa Judul`;
 
     // Pie Chart
     if (chartInstance) chartInstance.destroy();
@@ -371,12 +371,119 @@ function finish() {
         }
     });
 
+    // Simpan ke riwayat
+    const title = document.getElementById('songTitle').value.trim();
+    saveToHistory(title, sorted, memberDurations, memberColors, memberPhotos, totalDuration);
+
     document.getElementById('resultModal').style.display = 'flex';
 }
 
 function closeResultModal() {
     document.getElementById('resultModal').style.display = 'none';
 }
+// =============================================
+//  HISTORY (Riwayat)
+// =============================================
+function getHistory() {
+    return JSON.parse(localStorage.getItem('linedistro_history') || '[]');
+}
+
+function saveHistory(data) {
+    localStorage.setItem('linedistro_history', JSON.stringify(data));
+}
+
+function saveToHistory(title, sorted, durations, colors, photos, totalDuration) {
+    const history = getHistory();
+    const entry = {
+        id: Date.now(),
+        title: title || 'Tanpa Judul',
+        date: new Date().toLocaleString('id-ID'),
+        totalDuration: totalDuration,
+        members: sorted.map(n => ({
+            name: n,
+            duration: durations[n],
+            color: colors[n],
+            photo: photos[n],
+            pct: ((durations[n] / totalDuration) * 100).toFixed(1)
+        }))
+    };
+    history.unshift(entry); // terbaru di atas
+    saveHistory(history);
+}
+
+function openHistory() {
+    const history = getHistory();
+    const container = document.getElementById('historyList');
+    container.innerHTML = '';
+
+    if (history.length === 0) {
+        container.innerHTML = '<p style="color:#555; text-align:center; margin-top:20px;">Belum ada riwayat.</p>';
+    } else {
+        history.forEach(entry => {
+            const card = document.createElement('div');
+            card.className = 'history-card';
+            card.innerHTML = `
+                <div class="history-card-header" onclick="toggleHistoryDetail(${entry.id})">
+                    <div>
+                        <div class="history-title">🎵 ${entry.title}</div>
+                        <div class="history-date">${entry.date} &nbsp;·&nbsp; Total: ${entry.totalDuration.toFixed(1)}s</div>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <div class="history-avatars">
+                            ${entry.members.slice(0, 4).map(m =>
+                                `<img src="${m.photo}" title="${m.name}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'"/>`
+                            ).join('')}
+                            ${entry.members.length > 4 ? `<span class="history-more">+${entry.members.length - 4}</span>` : ''}
+                        </div>
+                        <span class="history-chevron" id="chev-${entry.id}">▼</span>
+                    </div>
+                </div>
+                <div class="history-detail" id="detail-${entry.id}" style="display:none;">
+                    ${entry.members.map((m, i) => `
+                        <div class="rank-item" style="border-left: 5px solid ${m.color}; margin-bottom:6px;">
+                            <div class="rank-name">
+                                <img src="${m.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'">
+                                <span>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i+1)} ${m.name}</span>
+                            </div>
+                            <div>
+                                <span class="rank-time">${m.duration.toFixed(1)}s</span>
+                                <span style="color:#888; margin-left:8px;">${m.pct}%</span>
+                            </div>
+                        </div>`).join('')}
+                    <button onclick="deleteHistoryEntry(${entry.id})" class="btn-del" style="width:100%; margin-top:8px;">🗑️ Hapus Riwayat Ini</button>
+                </div>`;
+            container.appendChild(card);
+        });
+    }
+
+    document.getElementById('historyModal').style.display = 'flex';
+}
+
+function toggleHistoryDetail(id) {
+    const detail = document.getElementById(`detail-${id}`);
+    const chev = document.getElementById(`chev-${id}`);
+    const isOpen = detail.style.display !== 'none';
+    detail.style.display = isOpen ? 'none' : 'block';
+    chev.textContent = isOpen ? '▼' : '▲';
+}
+
+function deleteHistoryEntry(id) {
+    if (!confirm("Hapus riwayat ini?")) return;
+    const history = getHistory().filter(e => e.id !== id);
+    saveHistory(history);
+    openHistory();
+}
+
+function clearAllHistory() {
+    if (!confirm("Hapus semua riwayat?")) return;
+    saveHistory([]);
+    openHistory();
+}
+
+function closeHistoryModal() {
+    document.getElementById('historyModal').style.display = 'none';
+}
+
 
 // =============================================
 //  8. SHORTCUT KEYBOARD
