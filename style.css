@@ -194,6 +194,9 @@ button:hover { border-color: #00d4ff; }
 .btn-del-preset { background-color: #7f1d1d; border-color: #7f1d1d; }
 .btn-del-preset:hover { background-color: #c0392b; border-color: #c0392b; }
 
+.btn-edit-member { background-color: #1a3a5c; border-color: #2980b9; }
+.btn-edit-member:hover { background-color: #2980b9; border-color: #2980b9; }
+
 /* =========================================
    Bottom Bar
    ========================================= */
