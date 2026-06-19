@@ -4,173 +4,110 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LineDistro Pro</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<!-- ── HEADER ── -->
-<header class="app-header">
-    <div class="header-inner">
-        <div class="logo">
-            <span class="logo-icon">◈</span>
-            <span class="logo-text">LineDistro <em>Pro</em></span>
-        </div>
-        <button class="btn-ghost" onclick="openHistory()">📋 Riwayat</button>
-    </div>
-</header>
-
-<!-- ── SETUP PANEL ── -->
-<main class="app-main">
-    <section class="panel setup-panel">
-        <p class="panel-label">SUMBER MEDIA</p>
-        <div class="input-row">
-            <input type="text" id="songTitle" placeholder="Judul lagu...">
+    <h1>LineDistro Pro 📊</h1>
+    <div class="setup-box">
+        <div class="input-group">
+            <input type="text" id="songTitle" placeholder="Judul Lagu...">
             <input type="text" id="ytLink" placeholder="Link YouTube...">
-            <button class="btn-primary" onclick="loadVideo()">▶ Muat</button>
-            <label class="btn-ghost file-btn">
-                ↑ Import MP4 / Audio
+            <button onclick="loadVideo()">Muat YouTube</button>
+            <label class="file-label">
+                📁 Import MP4/Audio
                 <input type="file" id="mediaUpload" accept="video/mp4,audio/*" onchange="loadLocalMedia(this)">
             </label>
         </div>
-
-        <p class="panel-label" style="margin-top:18px;">PRESET</p>
-        <div class="input-row">
-            <select id="presetSelect" onchange="loadSelectedPreset()">
-                <option value="">— Pilih preset —</option>
-            </select>
-            <button class="btn-ghost" onclick="saveNewPreset()">💾 Simpan</button>
-            <button class="btn-danger-soft" onclick="deleteSelectedPreset()">🗑 Hapus</button>
-            <button class="btn-ghost" onclick="openEditMenu()">✏️ Edit Member</button>
+        <div class="input-group">
+            <select id="presetSelect" onchange="loadSelectedPreset()"><option value="">-- Pilih Preset --</option></select>
+            <button onclick="saveNewPreset()">💾 Simpan Preset</button>
+            <button onclick="deleteSelectedPreset()" class="btn-del-preset">🗑️ Hapus Preset</button>
         </div>
-
-        <p class="panel-label" style="margin-top:18px;">TAMBAH MEMBER</p>
-        <div class="input-row">
-            <input type="text" id="memberName" placeholder="Nama member...">
-            <input type="color" id="memberColor" value="#a78bfa" title="Pilih warna">
-            <label class="btn-ghost file-btn">
-                🖼 Foto
-                <input type="file" id="memberPhoto" accept="image/*">
+        <div class="input-group">
+            <input type="text" id="memberName" placeholder="Nama Member...">
+            <input type="color" id="memberColor" value="#ff6b6b">
+            <label class="file-label">
+                🖼️ Foto
+                <input type="file" id="memberPhoto" accept="image/*" onchange="openCropModal(this,'add')">
             </label>
-            <button class="btn-primary" onclick="addNewMember()">+ Tambah</button>
+            <img id="addPhotoPreview" class="photo-preview" style="display:none;">
+            <button onclick="addNewMember()">+ Tambah</button>
         </div>
-    </section>
+    </div>
 
-    <!-- ── MAIN STAGE ── -->
-    <div class="stage">
-        <!-- Player -->
-        <section class="panel player-panel">
-            <p class="panel-label">PLAYER</p>
-            <div id="player" class="yt-player"></div>
-            <video id="localMedia" controls style="display:none; width:100%; border-radius:10px;"></video>
-            <audio id="audioPlayer" controls style="display:none; width:100%; margin-top:8px;"></audio>
-            <p id="mediaLabel" class="media-label"></p>
-        </section>
-
-        <!-- Members -->
-        <section class="panel members-panel">
-            <p class="panel-label">MEMBER</p>
+    <div class="main-container">
+        <div class="left-panel">
+            <div id="player"></div>
+            <video id="localMedia" controls style="display:none; width: 100%; border-radius: 8px;"></video>
+            <audio id="audioPlayer" controls style="display:none; width: 100%;"></audio>
+            <p id="mediaLabel" style="text-align:center; margin-top:8px; color:#888; font-size:13px;"></p>
+        </div>
+        <div class="right-panel">
+            <div class="active-recording-banner" id="activeRecordingBanner" style="display:none;"></div>
+            <div class="member-info-bar" id="memberInfoBar"></div>
             <div class="member-list" id="memberList"></div>
-            <div id="emptyHint" class="empty-hint">
-                <span>✦</span>
-                <p>Belum ada member.<br>Tambahkan di atas.</p>
-            </div>
-        </section>
+            <p id="emptyHint" style="color:#555; text-align:center; margin-top:20px;">Belum ada member. Tambahkan di atas ☝️</p>
+        </div>
     </div>
 
-    <!-- ── BOTTOM BAR ── -->
     <div class="bottom-bar">
-        <button class="btn-finish" onclick="finish()">✦ Selesai &amp; Hitung</button>
-        <button class="btn-ghost" onclick="confirmResetAll()">↺ Reset Semua</button>
+        <button onclick="finish()" class="btn-finish">✅ Selesai & Hitung</button>
+        <button onclick="resetAll()" class="btn-reset-all">🔄 Reset Semua</button>
     </div>
-</main>
 
-<!-- ════════════════════════════════
-     MODALS
-     ════════════════════════════════ -->
-
-<!-- Konfirmasi generik -->
-<div id="confirmModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box">
-        <p class="modal-icon" id="confirmIcon">⚠️</p>
-        <h3 id="confirmTitle">Konfirmasi</h3>
-        <p id="confirmMsg" class="modal-sub"></p>
-        <div class="modal-actions">
-            <button class="btn-ghost" onclick="closeConfirm()">Batal</button>
-            <button class="btn-danger" id="confirmOkBtn">Hapus</button>
+    <!-- Modal Edit Member -->
+    <div id="editModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h2>✏️ Edit Member</h2>
+            <select id="editMemberSelect" onchange="populateEditForm()">
+                <option value="">-- Pilih Member --</option>
+            </select>
+            <input type="text" id="editMemberName" placeholder="Nama baru...">
+            <input type="color" id="editMemberColor" value="#ff6b6b">
+            <label class="file-label">
+                🖼️ Ganti Foto
+                <input type="file" id="editMemberPhoto" accept="image/*" onchange="openCropModal(this,'edit')">
+            </label>
+            <img id="editPhotoPreview" class="photo-preview" style="display:none;">
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button onclick="applyEdit()" style="flex:1; background:#00d4ff; color:#000;">Simpan</button>
+                <button onclick="closeEditModal()" style="flex:1;">Batal</button>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- Toast / alert kecil -->
-<div id="toast" class="toast" style="display:none;"></div>
-
-<!-- Input nama preset -->
-<div id="promptModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box">
-        <p class="modal-icon">💾</p>
-        <h3 id="promptTitle">Simpan Preset</h3>
-        <p class="modal-sub" id="promptSub">Beri nama untuk preset ini.</p>
-        <input type="text" id="promptInput" class="modal-input" placeholder="Nama preset...">
-        <div class="modal-actions">
-            <button class="btn-ghost" onclick="closePrompt()">Batal</button>
-            <button class="btn-primary" onclick="confirmPrompt()">Simpan</button>
+    <!-- Modal Hasil -->
+    <div id="resultModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h2>📊 Hasil Line Distribution</h2>
+            <p id="resultSongTitle" style="color:#888; margin-bottom:10px;"></p>
+            <div id="leaderboard"></div>
+            <canvas id="resultChart" style="margin-top:20px;"></canvas>
+            <button onclick="closeResultModal()" style="margin-top:15px; width:100%;">Tutup</button>
         </div>
     </div>
-</div>
 
-<!-- Edit Member -->
-<div id="editModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box">
-        <p class="modal-icon">✏️</p>
-        <h3>Edit Member</h3>
-        <p class="modal-sub">Pilih member lalu ubah detail-nya.</p>
-        <select id="editMemberSelect" class="modal-input" onchange="populateEditForm()">
-            <option value="">— Pilih member —</option>
-        </select>
-        <input type="text" id="editMemberName" class="modal-input" placeholder="Nama baru...">
-        <div class="edit-color-row">
-            <label class="modal-sub">Warna</label>
-            <input type="color" id="editMemberColor" value="#a78bfa">
-        </div>
-        <label class="btn-ghost file-btn" style="width:100%; justify-content:center;">
-            🖼 Ganti Foto
-            <input type="file" id="editMemberPhoto" accept="image/*">
-        </label>
-        <div class="modal-actions">
-            <button class="btn-ghost" onclick="closeEditModal()">Batal</button>
-            <button class="btn-primary" onclick="applyEdit()">Simpan Perubahan</button>
+    <!-- Modal Crop Foto -->
+    <div id="cropModal" class="modal" style="display:none;">
+        <div class="modal-content crop-modal-content">
+            <h2>✂️ Potong Foto</h2>
+            <p style="color:#888; font-size:13px;">Geser untuk posisi, gunakan slider untuk zoom.</p>
+            <div class="crop-viewport" id="cropViewport">
+                <img id="cropImage" draggable="false" alt="">
+            </div>
+            <div class="crop-controls">
+                <span>🔍</span>
+                <input type="range" id="cropZoom" min="100" max="300" value="100">
+            </div>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button onclick="confirmCrop()" style="flex:1; background:#00d4ff; color:#000;">✅ Pakai Foto</button>
+                <button onclick="cancelCrop()" style="flex:1;">Batal</button>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- Hasil -->
-<div id="resultModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box modal-wide">
-        <p class="modal-icon">✦</p>
-        <h3 id="resultSongTitle">Hasil</h3>
-        <p class="modal-sub" id="resultDateLabel"></p>
-        <div id="leaderboard" class="leaderboard"></div>
-        <canvas id="resultChart" style="margin-top:20px; max-height:260px;"></canvas>
-        <button class="btn-primary" style="width:100%; margin-top:18px;" onclick="closeResultModal()">Tutup</button>
-    </div>
-</div>
-
-<!-- Riwayat -->
-<div id="historyModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box modal-wide">
-        <div class="modal-topbar">
-            <h3>📋 Riwayat</h3>
-            <button class="btn-danger-soft" onclick="confirmClearHistory()">🗑 Hapus Semua</button>
-        </div>
-        <div id="historyList"></div>
-        <button class="btn-ghost" style="width:100%; margin-top:14px;" onclick="closeHistoryModal()">Tutup</button>
-    </div>
-</div>
-
-<script src="https://www.youtube.com/iframe_api"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="script.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
