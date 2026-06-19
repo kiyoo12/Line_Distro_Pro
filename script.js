@@ -1,615 +1,813 @@
-// ══════════════════════════════════════════
+// =============================================
 //  STATE
-// ══════════════════════════════════════════
+// =============================================
 const memberList = document.getElementById('memberList');
 let memberDurations = {}, memberColors = {}, memberPhotos = {};
-let memberIntervals = {};
+let memberInsertOrder = []; // urutan penambahan (untuk shortcut angka & label, TIDAK ikut sorting tampilan)
 let chartInstance = null;
 
-// ══════════════════════════════════════════
-//  TOAST (pengganti alert)
-// ══════════════════════════════════════════
-function showToast(msg, duration = 2800) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.display = 'block';
-    requestAnimationFrame(() => t.classList.add('show'));
-    clearTimeout(t._timer);
-    t._timer = setTimeout(() => {
-        t.classList.remove('show');
-        setTimeout(() => t.style.display = 'none', 300);
-    }, duration);
+// Untuk fitur "tahan" (hold-to-record), state terpusat — BUGFIX #1
+// (sebelumnya interval disimpan di closure per-card, jadi kalau card
+// di-render ulang saat sedang ditahan, interval lama jadi "ghost" / leak)
+let activeHolds = {};   // { [name]: { startTime, startDuration } }
+let globalTimer = null;
+let isMouseButtonDown = false;
+document.addEventListener('mousedown', () => isMouseButtonDown = true);
+document.addEventListener('mouseup', () => isMouseButtonDown = false);
+
+// State untuk fitur crop foto (bulat, drag + zoom)
+let cropState = null; // {img, viewport, baseScale, zoom, panX, panY, target, dragging, lastX, lastY}
+let tempPhotos = { add: null, edit: null }; // hasil crop sementara sebelum disimpan
+
+// Ukuran kartu untuk animasi posisi naik/turun (fitur #3)
+const CARD_H = 78;
+const CARD_GAP = 10;
+
+// =============================================
+//  HELPER: konversi file gambar -> base64 (BUGFIX #3)
+//  Sebelumnya pakai URL.createObjectURL() yang di-simpan ke preset
+//  (localStorage). Blob URL itu hilang/invalid setelah reload halaman,
+//  jadi foto di preset jadi rusak. base64 dataURL persisten.
+// =============================================
+function fileToDataURL(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Gagal membaca file foto'));
+        reader.readAsDataURL(file);
+    });
 }
 
-// ══════════════════════════════════════════
-//  CONFIRM MODAL (pengganti confirm/alert)
-// ══════════════════════════════════════════
-let _confirmCallback = null;
-
-function showConfirm({ icon = '⚠️', title = 'Konfirmasi', msg = '', okLabel = 'Ya', okClass = 'btn-danger', onOk }) {
-    document.getElementById('confirmIcon').textContent = icon;
-    document.getElementById('confirmTitle').textContent = title;
-    document.getElementById('confirmMsg').textContent = msg;
-    const okBtn = document.getElementById('confirmOkBtn');
-    okBtn.textContent = okLabel;
-    okBtn.className = okClass;
-    _confirmCallback = onOk;
-    document.getElementById('confirmModal').style.display = 'flex';
+// BUGFIX #5: validasi tipe & ukuran foto sebelum diproses
+function validateImageFile(file) {
+    if (!file) return true;
+    if (!file.type.startsWith('image/')) {
+        alert('File foto harus berupa gambar (jpg/png/dll)!');
+        return false;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+        alert('Ukuran foto maksimal 5MB!');
+        return false;
+    }
+    return true;
 }
 
-function closeConfirm() {
-    document.getElementById('confirmModal').style.display = 'none';
-    _confirmCallback = null;
-}
-
-function confirmOk() {
-    document.getElementById('confirmModal').style.display = 'none';
-    if (_confirmCallback) _confirmCallback();
-    _confirmCallback = null;
-}
-
-document.getElementById('confirmOkBtn').addEventListener('click', confirmOk);
-
-// ══════════════════════════════════════════
-//  PROMPT MODAL (pengganti prompt)
-// ══════════════════════════════════════════
-let _promptCallback = null;
-
-function showPrompt({ icon = '✏️', title = '', sub = '', placeholder = '', onOk }) {
-    document.getElementById('promptTitle').textContent = title;
-    document.getElementById('promptSub').textContent = sub;
-    const inp = document.getElementById('promptInput');
-    inp.placeholder = placeholder;
-    inp.value = '';
-    _promptCallback = onOk;
-    document.getElementById('promptModal').style.display = 'flex';
-    setTimeout(() => inp.focus(), 100);
-}
-
-function closePrompt() {
-    document.getElementById('promptModal').style.display = 'none';
-    _promptCallback = null;
-}
-
-function confirmPrompt() {
-    const val = document.getElementById('promptInput').value.trim();
-    if (!val) { showToast('⚠️ Nama tidak boleh kosong'); return; }
-    closePrompt();
-    if (_promptCallback) _promptCallback(val);
-}
-
-document.getElementById('promptInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') confirmPrompt();
-    if (e.key === 'Escape') closePrompt();
-});
-
-// ══════════════════════════════════════════
+// =============================================
 //  1. RENDER MEMBER CARD
-// ══════════════════════════════════════════
+// =============================================
 function renderMemberCard(n, c, p, d, index) {
     const card = document.createElement('div');
     card.className = 'member-card';
-    card.style.borderLeftColor = c;
-    card.style.setProperty('--pulse-color', c + '66');
+    card.style.borderLeft = `5px solid ${c}`;
+    card.style.setProperty('--pulse-color', c + '88');
     card.dataset.name = n;
     card.innerHTML = `
         <div class="member-info">
-            <img src="${p}" class="member-avatar" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
-            <div>
-                <div class="member-name">${n}</div>
-                <span class="member-time" id="time-${CSS.escape(n)}">${d.toFixed(1)}s</span>
-            </div>
+            <img src="${p}" class="member-avatar" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}'">
+            <span class="member-name">${n}</span>
+            <span class="member-time">${d.toFixed(1)}s</span>
         </div>
+        <div class="member-progress"><div class="member-progress-fill" style="background:${c}"></div></div>
         <div class="member-actions">
-            <button class="btn-hold" style="background:${c}" title="Tahan untuk rekam [${index+1}]">[${index+1}] Tahan</button>
-            <button class="btn-sm" onclick="resetMember('${n}')" title="Reset durasi">↺</button>
-            <button class="btn-sm del" onclick="confirmDeleteMember('${n}')" title="Hapus member">✕</button>
+            <button class="btn-hold" style="background:${c}">[${index + 1}] Tahan</button>
+            <button class="btn-reset" onclick="resetMember('${n}')">🔄</button>
+            <button class="btn-del" onclick="deleteMember('${n}')">✖</button>
         </div>`;
     memberList.appendChild(card);
 
     const holdBtn = card.querySelector('.btn-hold');
-    const timeSpan = card.querySelector('.member-time');
 
-    function startHold() {
-        if (memberIntervals[n]) return;
-        card.classList.add('is-active');
-        holdBtn.classList.add('holding');
-        const startTime = Date.now();
-        const startDuration = memberDurations[n] || 0;
-        memberIntervals[n] = setInterval(() => {
-            memberDurations[n] = startDuration + (Date.now() - startTime) / 1000;
-            timeSpan.textContent = memberDurations[n].toFixed(1) + 's';
-        }, 50);
-    }
+    // Mouse events (desktop)
+    holdBtn.addEventListener('mousedown', () => startHold(n));
+    holdBtn.addEventListener('mouseup', () => stopHold(n));
+    holdBtn.addEventListener('mouseleave', () => stopHold(n));
+    // Drag mouse (tanpa lepas klik) ke tombol member lain -> ikut mulai tahan,
+    // supaya 2+ member yang menyanyi bareng bisa direkam berurutan cepat.
+    holdBtn.addEventListener('mouseenter', () => { if (isMouseButtonDown) startHold(n); });
 
-    function stopHold() {
-        if (!memberIntervals[n]) return;
-        clearInterval(memberIntervals[n]);
-        memberIntervals[n] = null;
-        card.classList.remove('is-active');
-        holdBtn.classList.remove('holding');
-    }
-
-    holdBtn.addEventListener('mousedown', startHold);
-    holdBtn.addEventListener('mouseup', stopHold);
-    holdBtn.addEventListener('mouseleave', stopHold);
-    holdBtn.addEventListener('touchstart', e => { e.preventDefault(); startHold(); }, { passive: false });
-    holdBtn.addEventListener('touchend',   e => { e.preventDefault(); stopHold(); },  { passive: false });
-    holdBtn.addEventListener('touchcancel', stopHold);
+    // Touch events (HP/tablet)
+    holdBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(n); }, { passive: false });
+    holdBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopHold(n); }, { passive: false });
+    holdBtn.addEventListener('touchcancel', () => stopHold(n));
 }
 
-// ══════════════════════════════════════════
+// =============================================
+//  1b. HOLD ENGINE TERPUSAT (BUGFIX #1 + fitur progress bar & sorting)
+// =============================================
+function startHold(n) {
+    if (activeHolds[n]) return;
+    activeHolds[n] = { startTime: Date.now(), startDuration: memberDurations[n] || 0 };
+
+    const card = memberList.querySelector(`[data-name="${CSS.escape(n)}"]`);
+    if (card) {
+        card.classList.add('is-active');
+        card.querySelector('.btn-hold')?.classList.add('holding');
+        card.querySelector('.member-avatar')?.classList.add('avatar-pulse'); // fitur #2
+    }
+    ensureGlobalTimer();
+    updateActiveRecordingBanner();
+}
+
+function stopHold(n) {
+    if (!activeHolds[n]) return;
+    delete activeHolds[n];
+
+    const card = memberList.querySelector(`[data-name="${CSS.escape(n)}"]`);
+    if (card) {
+        card.classList.remove('is-active');
+        card.querySelector('.btn-hold')?.classList.remove('holding');
+        card.querySelector('.member-avatar')?.classList.remove('avatar-pulse');
+    }
+    stopGlobalTimerIfIdle();
+    updateActiveRecordingBanner();
+}
+
+function stopAllHolds() {
+    Object.keys(activeHolds).forEach(n => delete activeHolds[n]);
+    stopGlobalTimerIfIdle();
+}
+
+function ensureGlobalTimer() {
+    if (globalTimer) return;
+    globalTimer = setInterval(() => {
+        const now = Date.now();
+        Object.keys(activeHolds).forEach(n => {
+            const a = activeHolds[n];
+            memberDurations[n] = a.startDuration + (now - a.startTime) / 1000;
+        });
+        refreshDisplay();
+    }, 50);
+}
+
+function stopGlobalTimerIfIdle() {
+    if (Object.keys(activeHolds).length === 0 && globalTimer) {
+        clearInterval(globalTimer);
+        globalTimer = null;
+    }
+}
+
+// Update angka durasi, progress bar (fitur #1), dan posisi naik/turun (fitur #3)
+function refreshDisplay() {
+    const names = Object.keys(memberDurations);
+    const maxDuration = Math.max(0.001, ...names.map(n => memberDurations[n] || 0));
+
+    names.forEach(n => {
+        const card = memberList.querySelector(`[data-name="${CSS.escape(n)}"]`);
+        if (!card) return;
+        const time = memberDurations[n] || 0;
+        const timeEl = card.querySelector('.member-time');
+        if (timeEl) timeEl.innerText = time.toFixed(1) + 's';
+        const fill = card.querySelector('.member-progress-fill');
+        if (fill) fill.style.width = ((time / maxDuration) * 100).toFixed(1) + '%';
+    });
+
+    updateCardPositions(names);
+    updateActiveRecordingBanner();
+}
+
+// Banner "🔴 Direkam bersama" — menampilkan member mana saja yang sedang
+// ditahan SAAT INI BERSAMAAN (untuk bait yang dinyanyikan unison)
+function updateActiveRecordingBanner() {
+    const banner = document.getElementById('activeRecordingBanner');
+    if (!banner) return;
+    const heldNames = Object.keys(activeHolds);
+
+    if (heldNames.length === 0) {
+        banner.style.display = 'none';
+        banner.innerHTML = '';
+        return;
+    }
+
+    banner.style.display = 'flex';
+    const label = heldNames.length > 1
+        ? `🔴 Direkam bersama (${heldNames.length}): `
+        : `🔴 Sedang direkam: `;
+    banner.innerHTML = `<span class="recording-label">${label}</span>` +
+        heldNames.map(n => `<span class="recording-name" style="border-color:${memberColors[n]}">${n}</span>`).join('');
+}
+
+// Susun ulang posisi vertikal kartu berdasarkan durasi terbanyak -> terendah,
+// dengan animasi geser halus (transisi CSS "top") — fitur #3
+function updateCardPositions(names) {
+    const sorted = (names || Object.keys(memberDurations)).slice()
+        .sort((a, b) => (memberDurations[b] || 0) - (memberDurations[a] || 0));
+
+    sorted.forEach((n, i) => {
+        const card = memberList.querySelector(`[data-name="${CSS.escape(n)}"]`);
+        if (card) card.style.top = (i * (CARD_H + CARD_GAP)) + 'px';
+    });
+
+    const totalHeight = sorted.length > 0 ? (sorted.length * (CARD_H + CARD_GAP) - CARD_GAP) : 0;
+    memberList.style.height = totalHeight + 'px';
+}
+
+// =============================================
+//  FITUR CROP FOTO (bulat, drag untuk geser + slider zoom)
+// =============================================
+function openCropModal(input, target) {
+    const file = input.files[0];
+    if (!file) return;
+    if (!validateImageFile(file)) {
+        input.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = document.getElementById('cropImage');
+        img.onload = () => initCrop(img, target);
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+
+    document.getElementById('cropModal').style.display = 'flex';
+}
+
+function initCrop(img, target) {
+    const viewport = document.getElementById('cropViewport');
+    const VS = viewport.clientWidth;
+    const baseScale = Math.max(VS / img.naturalWidth, VS / img.naturalHeight);
+
+    cropState = {
+        img, viewport, VS, baseScale,
+        zoom: 1, panX: 0, panY: 0,
+        target, dragging: false, lastX: 0, lastY: 0
+    };
+
+    document.getElementById('cropZoom').value = 100;
+    applyCropTransform(true);
+}
+
+function currentCropScale() {
+    return cropState.baseScale * cropState.zoom;
+}
+
+function applyCropTransform(center) {
+    const { img, VS } = cropState;
+    const scale = currentCropScale();
+    const dw = img.naturalWidth * scale;
+    const dh = img.naturalHeight * scale;
+
+    if (center) {
+        cropState.panX = (VS - dw) / 2;
+        cropState.panY = (VS - dh) / 2;
+    }
+
+    // Pastikan gambar selalu menutupi seluruh viewport bulat (tidak ada celah kosong)
+    cropState.panX = Math.min(0, Math.max(VS - dw, cropState.panX));
+    cropState.panY = Math.min(0, Math.max(VS - dh, cropState.panY));
+
+    img.style.width = dw + 'px';
+    img.style.height = dh + 'px';
+    img.style.transform = `translate(${cropState.panX}px, ${cropState.panY}px)`;
+}
+
+function confirmCrop() {
+    if (!cropState) return;
+    const { img, VS } = cropState;
+    const scale = currentCropScale();
+    const OUT = 400; // resolusi output foto
+
+    const sx = -cropState.panX / scale;
+    const sy = -cropState.panY / scale;
+    const sSize = VS / scale;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = OUT;
+    canvas.height = OUT;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, OUT, OUT);
+
+    const dataURL = canvas.toDataURL('image/jpeg', 0.9);
+    tempPhotos[cropState.target] = dataURL;
+
+    const previewId = cropState.target === 'add' ? 'addPhotoPreview' : 'editPhotoPreview';
+    const preview = document.getElementById(previewId);
+    if (preview) {
+        preview.src = dataURL;
+        preview.style.display = 'inline-block';
+    }
+
+    closeCropModal();
+}
+
+function cancelCrop() {
+    const target = cropState ? cropState.target : null;
+    closeCropModal();
+    if (target === 'add') document.getElementById('memberPhoto').value = '';
+    if (target === 'edit') document.getElementById('editMemberPhoto').value = '';
+}
+
+function closeCropModal() {
+    document.getElementById('cropModal').style.display = 'none';
+    cropState = null;
+}
+
+// Drag (mouse & touch) + zoom slider untuk viewport crop
+(function setupCropInteractions() {
+    document.addEventListener('DOMContentLoaded', () => {
+        const viewport = document.getElementById('cropViewport');
+        const zoomSlider = document.getElementById('cropZoom');
+        if (!viewport || !zoomSlider) return;
+
+        const startDrag = (x, y) => {
+            if (!cropState) return;
+            cropState.dragging = true;
+            cropState.lastX = x;
+            cropState.lastY = y;
+            viewport.classList.add('dragging');
+        };
+        const moveDrag = (x, y) => {
+            if (!cropState || !cropState.dragging) return;
+            cropState.panX += x - cropState.lastX;
+            cropState.panY += y - cropState.lastY;
+            cropState.lastX = x;
+            cropState.lastY = y;
+            applyCropTransform(false);
+        };
+        const endDrag = () => {
+            if (!cropState) return;
+            cropState.dragging = false;
+            viewport.classList.remove('dragging');
+        };
+
+        viewport.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
+        document.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+        document.addEventListener('mouseup', endDrag);
+
+        viewport.addEventListener('touchstart', (e) => {
+            const t = e.touches[0];
+            startDrag(t.clientX, t.clientY);
+        }, { passive: true });
+        viewport.addEventListener('touchmove', (e) => {
+            const t = e.touches[0];
+            moveDrag(t.clientX, t.clientY);
+            e.preventDefault();
+        }, { passive: false });
+        viewport.addEventListener('touchend', endDrag);
+
+        zoomSlider.addEventListener('input', (e) => {
+            if (!cropState) return;
+            cropState.zoom = e.target.value / 100;
+            applyCropTransform(false);
+        });
+    });
+})();
+
+// =============================================
 //  2. TAMBAH & KELOLA MEMBER
-// ══════════════════════════════════════════
-function addNewMember() {
+// =============================================
+async function addNewMember() {
     const n = document.getElementById('memberName').value.trim();
-    if (!n) { showToast('⚠️ Nama member tidak boleh kosong'); return; }
-    const dup = Object.keys(memberDurations).some(k => k.toLowerCase() === n.toLowerCase());
-    if (dup) { showToast(`⚠️ Member "${n}" sudah ada`); return; }
+    if (!n) return alert("Nama member tidak boleh kosong!");
+    if (memberDurations[n] !== undefined) return alert("Member dengan nama ini sudah ada!");
 
     memberDurations[n] = 0;
-    memberColors[n]    = document.getElementById('memberColor').value;
-    const f = document.getElementById('memberPhoto').files[0];
-    memberPhotos[n] = f
-        ? URL.createObjectURL(f)
-        : `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random&color=fff`;
+    memberColors[n] = document.getElementById('memberColor').value;
+    memberPhotos[n] = tempPhotos.add
+        ? tempPhotos.add // hasil crop
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random`;
+    memberInsertOrder.push(n);
 
-    document.getElementById('memberName').value  = '';
+    document.getElementById('memberName').value = '';
     document.getElementById('memberPhoto').value = '';
+    tempPhotos.add = null;
+    const preview = document.getElementById('addPhotoPreview');
+    if (preview) { preview.style.display = 'none'; preview.src = ''; }
+
     reloadMemberList();
-    showToast(`✅ ${n} ditambahkan`);
 }
 
 function reloadMemberList() {
+    stopAllHolds();
     memberList.innerHTML = '';
-    const names = Object.keys(memberDurations);
-    const hint = document.getElementById('emptyHint');
-    hint.style.display = names.length === 0 ? 'flex' : 'none';
+    // Render dalam urutan penambahan (supaya nomor shortcut [1][2][3] stabil),
+    // posisi vertikal (naik/turun) tetap diatur terpisah lewat updateCardPositions().
+    const names = memberInsertOrder.filter(n => memberDurations[n] !== undefined);
+    document.getElementById('emptyHint').style.display = names.length === 0 ? 'block' : 'none';
     names.forEach((n, i) => renderMemberCard(n, memberColors[n], memberPhotos[n], memberDurations[n], i));
     refreshEditDropdown();
+    renderInfoBar();
+    refreshDisplay();
+}
+
+// Fitur #3: panel info menampilkan siapa saja member di sesi ini (statis, tidak ikut acak posisi)
+function renderInfoBar() {
+    const bar = document.getElementById('memberInfoBar');
+    if (!bar) return;
+    const names = memberInsertOrder.filter(n => memberDurations[n] !== undefined);
+
+    if (names.length === 0) {
+        bar.innerHTML = '';
+        bar.style.display = 'none';
+        return;
+    }
+
+    bar.style.display = 'flex';
+    bar.innerHTML = `<strong class="info-bar-title">👥 Member di sesi ini (${names.length})</strong>`;
+    names.forEach(n => {
+        const chip = document.createElement('div');
+        chip.className = 'info-chip';
+        chip.style.borderLeft = `3px solid ${memberColors[n]}`;
+        chip.innerHTML = `<img src="${memberPhotos[n]}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}'"><span>${n}</span>`;
+        bar.appendChild(chip);
+    });
 }
 
 function resetMember(n) {
-    if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
+    if (activeHolds[n]) stopHold(n);
     memberDurations[n] = 0;
     reloadMemberList();
-    showToast(`↺ Reset ${n}`);
-}
-
-function confirmDeleteMember(n) {
-    showConfirm({
-        icon: '🗑',
-        title: `Hapus ${n}?`,
-        msg: 'Durasi yang sudah direkam akan hilang.',
-        okLabel: 'Hapus',
-        okClass: 'btn-danger',
-        onOk: () => deleteMember(n)
-    });
 }
 
 function deleteMember(n) {
-    if (memberIntervals[n]) clearInterval(memberIntervals[n]);
-    memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== n));
-    memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== n));
-    memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== n));
-    memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== n));
+    if (!confirm(`Hapus member "${n}"?`)) return;
+    if (activeHolds[n]) stopHold(n);
+    delete memberDurations[n];
+    delete memberColors[n];
+    delete memberPhotos[n];
+    memberInsertOrder = memberInsertOrder.filter(x => x !== n);
     reloadMemberList();
-    showToast(`🗑 ${n} dihapus`);
 }
 
-function confirmResetAll() {
-    if (Object.keys(memberDurations).length === 0) { showToast('⚠️ Belum ada member'); return; }
-    showConfirm({
-        icon: '↺',
-        title: 'Reset semua durasi?',
-        msg: 'Semua waktu rekaman akan kembali ke 0.',
-        okLabel: 'Reset',
-        okClass: 'btn-primary',
-        onOk: () => {
-            Object.keys(memberDurations).forEach(n => {
-                if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
-                memberDurations[n] = 0;
-            });
-            reloadMemberList();
-            showToast('↺ Semua durasi direset');
-        }
-    });
+function resetAll() {
+    if (!confirm("Reset semua durasi ke 0?")) return;
+    stopAllHolds();
+    Object.keys(memberDurations).forEach(n => memberDurations[n] = 0);
+    reloadMemberList();
 }
 
-// ══════════════════════════════════════════
-//  3. EDIT MEMBER
-// ══════════════════════════════════════════
+// =============================================
+//  3. EDIT MEMBER (Modal)
+// =============================================
 function refreshEditDropdown() {
     const sel = document.getElementById('editMemberSelect');
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">— Pilih member —</option>';
-    Object.keys(memberDurations).forEach(n => {
-        const o = document.createElement('option');
-        o.value = n; o.textContent = n;
-        sel.appendChild(o);
+    const current = sel.value;
+    sel.innerHTML = '<option value="">-- Pilih Member --</option>';
+    memberInsertOrder.filter(n => memberDurations[n] !== undefined).forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        sel.appendChild(opt);
     });
-    if (cur && memberDurations[cur] !== undefined) sel.value = cur;
+    if (current && memberDurations[current] !== undefined) sel.value = current;
 }
 
 function openEditMenu() {
-    if (Object.keys(memberDurations).length === 0) { showToast('⚠️ Belum ada member'); return; }
     refreshEditDropdown();
     document.getElementById('editModal').style.display = 'flex';
 }
 
 function closeEditModal() {
     document.getElementById('editModal').style.display = 'none';
+    tempPhotos.edit = null;
 }
 
 function populateEditForm() {
     const n = document.getElementById('editMemberSelect').value;
-    if (!n) return;
-    document.getElementById('editMemberName').value  = n;
-    document.getElementById('editMemberColor').value = memberColors[n] || '#a78bfa';
+
+    // Reset hasil crop sebelumnya & input file tiap ganti member yang dipilih
+    tempPhotos.edit = null;
+    document.getElementById('editMemberPhoto').value = '';
+    const preview = document.getElementById('editPhotoPreview');
+
+    if (!n) {
+        if (preview) { preview.style.display = 'none'; preview.src = ''; }
+        return;
+    }
+
+    document.getElementById('editMemberName').value = n;
+    document.getElementById('editMemberColor').value = memberColors[n] || '#ff6b6b';
+
+    if (preview) {
+        preview.src = memberPhotos[n];
+        preview.style.display = 'inline-block';
+    }
 }
 
-function applyEdit() {
+async function applyEdit() {
     const oldName = document.getElementById('editMemberSelect').value;
     const newName = document.getElementById('editMemberName').value.trim();
     const newColor = document.getElementById('editMemberColor').value;
-    const newPhotoFile = document.getElementById('editMemberPhoto').files[0];
 
-    if (!oldName) { showToast('⚠️ Pilih member dulu'); return; }
-    if (!newName) { showToast('⚠️ Nama tidak boleh kosong'); return; }
-
-    if (newName !== oldName) {
-        memberDurations[newName] = memberDurations[oldName];
-        memberColors[newName]    = newColor;
-        memberPhotos[newName]    = newPhotoFile ? URL.createObjectURL(newPhotoFile) : memberPhotos[oldName];
-        if (memberIntervals[oldName]) { memberIntervals[newName] = memberIntervals[oldName]; }
-        memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== oldName));
-        memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== oldName));
-        memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== oldName));
-        memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== oldName));
-    } else {
-        memberColors[oldName] = newColor;
-        if (newPhotoFile) memberPhotos[oldName] = URL.createObjectURL(newPhotoFile);
+    if (!oldName) return alert("Pilih member dulu!");
+    if (!newName) return alert("Nama tidak boleh kosong!");
+    if (newName !== oldName && memberDurations[newName] !== undefined) {
+        return alert("Sudah ada member dengan nama baru itu!");
     }
 
+    // BUGFIX #1: hentikan dulu timer aktif sebelum rename/reload,
+    // supaya tidak ada interval "ghost" yang nempel ke nama lama.
+    if (activeHolds[oldName]) stopHold(oldName);
+
+    const newPhoto = tempPhotos.edit; // hasil crop (null kalau foto tidak diganti)
+
+    // Rename kalau namanya berubah
+    if (newName !== oldName) {
+        memberDurations[newName] = memberDurations[oldName];
+        memberColors[newName] = newColor;
+        memberPhotos[newName] = newPhoto || memberPhotos[oldName];
+        delete memberDurations[oldName];
+        delete memberColors[oldName];
+        delete memberPhotos[oldName];
+
+        const idx = memberInsertOrder.indexOf(oldName);
+        if (idx !== -1) memberInsertOrder[idx] = newName;
+    } else {
+        memberColors[oldName] = newColor;
+        if (newPhoto) memberPhotos[oldName] = newPhoto;
+    }
+
+    tempPhotos.edit = null;
     closeEditModal();
     reloadMemberList();
-    showToast(`✅ ${newName} diperbarui`);
 }
 
-// ══════════════════════════════════════════
-//  4. PRESET
-// ══════════════════════════════════════════
-function getPresets() { return JSON.parse(localStorage.getItem('linedistro_presets') || '{}'); }
-function savePresets(d) { localStorage.setItem('linedistro_presets', JSON.stringify(d)); }
+// =============================================
+//  4. PRESET (localStorage)
+// =============================================
+function getPresets() {
+    return JSON.parse(localStorage.getItem('linedistro_presets') || '{}');
+}
+
+function savePresets(data) {
+    localStorage.setItem('linedistro_presets', JSON.stringify(data));
+}
 
 function refreshPresetDropdown() {
     const sel = document.getElementById('presetSelect');
     const presets = getPresets();
-    sel.innerHTML = '<option value="">— Pilih preset —</option>';
+    sel.innerHTML = '<option value="">-- Pilih Preset --</option>';
     Object.keys(presets).forEach(name => {
-        const o = document.createElement('option');
-        o.value = name; o.textContent = name;
-        sel.appendChild(o);
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
     });
 }
 
 function saveNewPreset() {
-    const members = Object.keys(memberDurations);
-    if (members.length === 0) { showToast('⚠️ Tambahkan member dulu'); return; }
-    showPrompt({
-        icon: '💾',
-        title: 'Simpan Preset',
-        sub: 'Beri nama untuk preset ini.',
-        placeholder: 'Nama preset...',
-        onOk: (name) => {
-            const presets = getPresets();
-            presets[name] = members.map(n => ({ name: n, color: memberColors[n], photo: memberPhotos[n] }));
-            savePresets(presets);
-            refreshPresetDropdown();
-            showToast(`💾 Preset "${name}" disimpan`);
-        }
-    });
+    const members = memberInsertOrder.filter(n => memberDurations[n] !== undefined);
+    if (members.length === 0) return alert("Tambahkan member dulu sebelum menyimpan preset!");
+    const name = prompt("Nama preset:");
+    if (!name || !name.trim()) return;
+
+    const presets = getPresets();
+    presets[name.trim()] = members.map(n => ({
+        name: n,
+        color: memberColors[n],
+        photo: memberPhotos[n] // sekarang base64, jadi aman disimpan & dimuat ulang
+    }));
+    savePresets(presets);
+    refreshPresetDropdown();
+    alert(`Preset "${name.trim()}" berhasil disimpan!`);
 }
 
 function loadSelectedPreset() {
     const name = document.getElementById('presetSelect').value;
     if (!name) return;
-    const preset = getPresets()[name];
+    const presets = getPresets();
+    const preset = presets[name];
     if (!preset) return;
 
-    const doLoad = () => {
-        memberDurations = {}; memberColors = {}; memberPhotos = {};
-        preset.forEach(m => {
-            memberDurations[m.name] = 0;
-            memberColors[m.name]    = m.color || '#a78bfa';
-            memberPhotos[m.name]    = m.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=random`;
-        });
-        reloadMemberList();
-        showToast(`✅ Preset "${name}" dimuat`);
-    };
-
     if (Object.keys(memberDurations).length > 0) {
-        showConfirm({
-            icon: '📂',
-            title: `Muat "${name}"?`,
-            msg: 'Member saat ini akan diganti dengan preset ini.',
-            okLabel: 'Muat',
-            okClass: 'btn-primary',
-            onOk: doLoad
-        });
-    } else {
-        doLoad();
+        if (!confirm("Memuat preset akan menghapus member saat ini. Lanjutkan?")) {
+            document.getElementById('presetSelect').value = '';
+            return;
+        }
     }
+
+    stopAllHolds();
+    memberDurations = {};
+    memberColors = {};
+    memberPhotos = {};
+    memberInsertOrder = [];
+
+    preset.forEach(m => {
+        memberDurations[m.name] = 0;
+        memberColors[m.name] = m.color || '#ff6b6b';
+        memberPhotos[m.name] = m.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=random`;
+        memberInsertOrder.push(m.name);
+    });
+
+    reloadMemberList();
 }
 
 function deleteSelectedPreset() {
     const name = document.getElementById('presetSelect').value;
-    if (!name) { showToast('⚠️ Pilih preset dulu'); return; }
-    showConfirm({
-        icon: '🗑',
-        title: `Hapus preset "${name}"?`,
-        msg: 'Preset ini akan dihapus permanen.',
-        okLabel: 'Hapus',
-        okClass: 'btn-danger',
-        onOk: () => {
-            const presets = getPresets();
-            delete presets[name];
-            savePresets(presets);
-            refreshPresetDropdown();
-            showToast(`🗑 Preset "${name}" dihapus`);
-        }
-    });
+    if (!name) return alert("Pilih preset yang ingin dihapus!");
+    if (!confirm(`Hapus preset "${name}"?`)) return;
+    const presets = getPresets();
+    delete presets[name];
+    savePresets(presets);
+    refreshPresetDropdown();
 }
 
-// ══════════════════════════════════════════
-//  5. MEDIA
-// ══════════════════════════════════════════
+// =============================================
+//  5. LOAD MEDIA (FIX: MP4 & Audio)
+// =============================================
 function loadLocalMedia(input) {
     const file = input.files[0];
     if (!file) return;
+
     const url = URL.createObjectURL(file);
-    const vid = document.getElementById('localMedia');
-    const aud = document.getElementById('audioPlayer');
-    const yt  = document.getElementById('player');
-    const lbl = document.getElementById('mediaLabel');
-    yt.style.display = 'none'; vid.style.display = 'none'; aud.style.display = 'none';
+    const videoEl = document.getElementById('localMedia');
+    const audioEl = document.getElementById('audioPlayer');
+    const playerEl = document.getElementById('player');
+    const label = document.getElementById('mediaLabel');
+
+    // Sembunyikan YouTube player
+    playerEl.style.display = 'none';
+    videoEl.style.display = 'none';
+    audioEl.style.display = 'none';
+
     if (file.type.startsWith('video/')) {
-        vid.src = url; vid.style.display = 'block'; vid.load();
-        lbl.textContent = `🎬 ${file.name}`;
+        videoEl.src = url;
+        videoEl.style.display = 'block';
+        videoEl.load();
+        label.textContent = `🎬 ${file.name}`;
     } else if (file.type.startsWith('audio/')) {
-        aud.src = url; aud.style.display = 'block'; aud.load();
-        lbl.textContent = `🎵 ${file.name}`;
+        audioEl.src = url;
+        audioEl.style.display = 'block';
+        audioEl.load();
+        label.textContent = `🎵 ${file.name}`;
     } else {
-        showToast('⚠️ Format tidak didukung');
+        alert("Format file tidak didukung!");
+    }
+}
+
+// =============================================
+//  6. YOUTUBE PLAYER (BUGFIX #2)
+//  Sebelumnya new YT.Player() langsung dipanggil tanpa menunggu
+//  window.onYouTubeIframeAPIReady, jadi kalau diklik sebelum API
+//  selesai load -> error "YT is not defined".
+// =============================================
+let ytApiReady = false;
+let pendingVideoId = null;
+
+window.onYouTubeIframeAPIReady = function () {
+    ytApiReady = true;
+    if (pendingVideoId) {
+        createYTPlayer(pendingVideoId);
+        pendingVideoId = null;
+    }
+};
+
+function createYTPlayer(v) {
+    if (window.ytPlayer) {
+        window.ytPlayer.loadVideoById(v);
+    } else {
+        window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v });
     }
 }
 
 function loadVideo() {
     const url = document.getElementById('ytLink').value.trim();
     const v = (url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&]{11})/))?.[1];
-    if (!v) { showToast('⚠️ Link YouTube tidak valid'); return; }
+    if (!v) return alert("Link YouTube tidak valid!");
+
+    // Sembunyikan local media
     document.getElementById('localMedia').style.display = 'none';
     document.getElementById('audioPlayer').style.display = 'none';
+    document.getElementById('player').style.display = 'block';
     document.getElementById('mediaLabel').textContent = '';
-    const yt = document.getElementById('player');
-    yt.style.display = 'block';
-    if (window.ytPlayer) { window.ytPlayer.loadVideoById(v); }
-    else { window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v }); }
+
+    if (ytApiReady && window.YT && window.YT.Player) {
+        createYTPlayer(v);
+    } else {
+        pendingVideoId = v;
+        // Video akan otomatis dimuat begitu onYouTubeIframeAPIReady terpanggil
+    }
 }
 
-// ══════════════════════════════════════════
-//  6. FINISH & CHART
-// ══════════════════════════════════════════
+// =============================================
+//  7. SELESAI & HITUNG (Pie Chart + Leaderboard)
+// =============================================
 function finish() {
     const names = Object.keys(memberDurations);
-    if (names.length === 0) { showToast('⚠️ Belum ada member'); return; }
-    const total = Object.values(memberDurations).reduce((a, b) => a + b, 0);
-    if (total === 0) { showToast('⚠️ Semua durasi masih 0, rekam dulu!'); return; }
+    if (names.length === 0) return alert("Belum ada member!");
 
-    const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
-    const title  = document.getElementById('songTitle').value.trim() || 'Tanpa Judul';
+    const totalDuration = Object.values(memberDurations).reduce((a, b) => a + b, 0);
+    if (totalDuration === 0) return alert("Semua durasi masih 0! Rekam dulu ya.");
+
+    // Urutkan dari terbanyak
+    const sorted = names.slice().sort((a, b) => memberDurations[b] - memberDurations[a]);
 
     // Leaderboard
     const lb = document.getElementById('leaderboard');
     lb.innerHTML = '';
     sorted.forEach((n, i) => {
-        const pct  = ((memberDurations[n] / total) * 100).toFixed(1);
-        const badge = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
-        const item  = document.createElement('div');
+        const pct = ((memberDurations[n] / totalDuration) * 100).toFixed(1);
+        const item = document.createElement('div');
         item.className = 'rank-item';
-        item.style.borderLeftColor = memberColors[n];
+        item.style.borderLeft = `5px solid ${memberColors[n]}`;
         item.innerHTML = `
             <div class="rank-name">
-                <img src="${memberPhotos[n]}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;"
-                     onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}'">
-                <span class="rank-badge">${badge}</span>
-                <span>${n}</span>
+                <img src="${memberPhotos[n]}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                <span>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`} ${n}</span>
             </div>
-            <div class="rank-meta">
+            <div>
                 <span class="rank-time">${memberDurations[n].toFixed(1)}s</span>
-                <span class="rank-pct">${pct}%</span>
+                <span style="color:#888; margin-left:8px;">${pct}%</span>
             </div>`;
         lb.appendChild(item);
     });
 
-    document.getElementById('resultSongTitle').textContent = `🎵 ${title}`;
-    document.getElementById('resultDateLabel').textContent = new Date().toLocaleString('id-ID');
+    // Judul lagu
+    const title = document.getElementById('songTitle').value.trim();
+    document.getElementById('resultSongTitle').textContent = title ? `🎵 ${title}` : '';
 
+    // Pie Chart
     if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(document.getElementById('resultChart'), {
         type: 'doughnut',
         data: {
             labels: sorted,
             datasets: [{
-                data: sorted.map(n => memberDurations[n].toFixed(2)),
+                data: sorted.map(n => memberDurations[n].toFixed(1)),
                 backgroundColor: sorted.map(n => memberColors[n]),
-                borderColor: '#13131f',
-                borderWidth: 3
+                borderColor: '#121212',
+                borderWidth: 2
             }]
         },
         options: {
             plugins: {
-                legend: { labels: { color: '#9490b0', font: { family: 'Inter', size: 12 }, boxWidth: 14 } },
+                legend: { labels: { color: '#e0e0e0' } },
                 tooltip: {
                     callbacks: {
-                        label: ctx => {
-                            const pct = ((ctx.parsed / total) * 100).toFixed(1);
-                            return ` ${ctx.parsed}s  (${pct}%)`;
+                        label: (ctx) => {
+                            const val = ctx.parsed;
+                            const pct = ((val / totalDuration) * 100).toFixed(1);
+                            return ` ${val}s (${pct}%)`;
                         }
                     }
                 }
-            },
-            cutout: '60%'
+            }
         }
     });
 
-    saveToHistory(title, sorted, memberDurations, memberColors, memberPhotos, total);
     document.getElementById('resultModal').style.display = 'flex';
 }
 
-function closeResultModal() { document.getElementById('resultModal').style.display = 'none'; }
-
-// ══════════════════════════════════════════
-//  7. HISTORY
-// ══════════════════════════════════════════
-function getHistory()  { return JSON.parse(localStorage.getItem('linedistro_history') || '[]'); }
-function saveHistory(d){ localStorage.setItem('linedistro_history', JSON.stringify(d)); }
-
-function saveToHistory(title, sorted, durations, colors, photos, total) {
-    const history = getHistory();
-    history.unshift({
-        id: Date.now(),
-        title,
-        date: new Date().toLocaleString('id-ID'),
-        totalDuration: total,
-        members: sorted.map(n => ({
-            name: n, duration: durations[n], color: colors[n], photo: photos[n],
-            pct: ((durations[n] / total) * 100).toFixed(1)
-        }))
-    });
-    saveHistory(history);
+function closeResultModal() {
+    document.getElementById('resultModal').style.display = 'none';
 }
 
-function openHistory() {
-    const history = getHistory();
-    const container = document.getElementById('historyList');
-    container.innerHTML = '';
-
-    if (history.length === 0) {
-        container.innerHTML = '<p style="color:var(--text3);text-align:center;padding:30px 0;font-size:13px;">Belum ada riwayat.</p>';
-    } else {
-        history.forEach(entry => {
-            const card = document.createElement('div');
-            card.className = 'history-card';
-            const badge = i => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
-            card.innerHTML = `
-                <div class="history-card-header" onclick="toggleHistoryDetail(${entry.id})">
-                    <div>
-                        <div class="history-card-title">🎵 ${entry.title}</div>
-                        <div class="history-card-meta">${entry.date} · Total ${entry.totalDuration.toFixed(1)}s</div>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <div class="history-avatars">
-                            ${entry.members.slice(0, 4).map(m =>
-                                `<img src="${m.photo}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'"/>`
-                            ).join('')}
-                            ${entry.members.length > 4 ? `<span class="history-more">+${entry.members.length - 4}</span>` : ''}
-                        </div>
-                        <span class="history-chevron" id="chev-${entry.id}">▾</span>
-                    </div>
-                </div>
-                <div class="history-detail" id="detail-${entry.id}">
-                    <div style="padding-top:10px; display:flex; flex-direction:column; gap:6px;">
-                        ${entry.members.map((m, i) => `
-                            <div class="rank-item" style="border-left-color:${m.color};">
-                                <div class="rank-name">
-                                    <img src="${m.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;"
-                                         onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'">
-                                    <span class="rank-badge">${badge(i)}</span>
-                                    <span>${m.name}</span>
-                                </div>
-                                <div class="rank-meta">
-                                    <span class="rank-time">${m.duration.toFixed(1)}s</span>
-                                    <span class="rank-pct">${m.pct}%</span>
-                                </div>
-                            </div>`).join('')}
-                    </div>
-                    <button class="btn-danger-soft" style="width:100%;justify-content:center;margin-top:10px;"
-                            onclick="confirmDeleteHistoryEntry(${entry.id})">🗑 Hapus Riwayat Ini</button>
-                </div>`;
-            container.appendChild(card);
-        });
-    }
-
-    document.getElementById('historyModal').style.display = 'flex';
-}
-
-function toggleHistoryDetail(id) {
-    const detail = document.getElementById(`detail-${id}`);
-    const chev   = document.getElementById(`chev-${id}`);
-    const isOpen = detail.classList.contains('open');
-    detail.classList.toggle('open', !isOpen);
-    chev.classList.toggle('open', !isOpen);
-}
-
-function confirmDeleteHistoryEntry(id) {
-    showConfirm({
-        icon: '🗑', title: 'Hapus riwayat ini?',
-        msg: 'Data rekaman ini tidak bisa dikembalikan.',
-        okLabel: 'Hapus', okClass: 'btn-danger',
-        onOk: () => {
-            saveHistory(getHistory().filter(e => e.id !== id));
-            openHistory();
-            showToast('🗑 Riwayat dihapus');
-        }
-    });
-}
-
-function confirmClearHistory() {
-    showConfirm({
-        icon: '🗑', title: 'Hapus semua riwayat?',
-        msg: 'Seluruh riwayat rekaman akan dihapus permanen.',
-        okLabel: 'Hapus Semua', okClass: 'btn-danger',
-        onOk: () => { saveHistory([]); openHistory(); showToast('🗑 Semua riwayat dihapus'); }
-    });
-}
-
-function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
-
-// ══════════════════════════════════════════
-//  8. KEYBOARD SHORTCUTS
-// ══════════════════════════════════════════
-document.addEventListener('keydown', e => {
+// =============================================
+//  8. SHORTCUT KEYBOARD (BUGFIX #4)
+//  Sebelumnya keydown auto-repeat (saat tombol ditekan terus) memicu
+//  startHold berkali-kali tanpa henti -> flicker class/efek tidak perlu.
+// =============================================
+document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.repeat) return; // BUGFIX #4: abaikan auto-repeat browser
+
     if (e.code === 'Space') {
         e.preventDefault();
-        const vid = document.getElementById('localMedia');
-        const aud = document.getElementById('audioPlayer');
-        if (vid.style.display !== 'none') { vid.paused ? vid.play() : vid.pause(); }
-        else if (aud.style.display !== 'none') { aud.paused ? aud.play() : aud.pause(); }
-        else if (window.ytPlayer) { window.ytPlayer.getPlayerState() === 1 ? window.ytPlayer.pauseVideo() : window.ytPlayer.playVideo(); }
+        const video = document.getElementById('localMedia');
+        const audio = document.getElementById('audioPlayer');
+        if (video.style.display !== 'none') {
+            video.paused ? video.play() : video.pause();
+        } else if (audio.style.display !== 'none') {
+            audio.paused ? audio.play() : audio.pause();
+        } else if (window.ytPlayer) {
+            window.ytPlayer.getPlayerState() === 1
+                ? window.ytPlayer.pauseVideo()
+                : window.ytPlayer.playVideo();
+        }
         return;
     }
+
     const idx = parseInt(e.key) - 1;
     const btns = document.querySelectorAll('.btn-hold');
-    if (idx >= 0 && idx < btns.length) btns[idx].dispatchEvent(new MouseEvent('mousedown'));
+    if (idx >= 0 && idx < btns.length) {
+        btns[idx].dispatchEvent(new MouseEvent('mousedown'));
+    }
 });
 
-document.addEventListener('keyup', e => {
+document.addEventListener('keyup', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     const idx = parseInt(e.key) - 1;
     const btns = document.querySelectorAll('.btn-hold');
-    if (idx >= 0 && idx < btns.length) btns[idx].dispatchEvent(new MouseEvent('mouseup'));
+    if (idx >= 0 && idx < btns.length) {
+        btns[idx].dispatchEvent(new MouseEvent('mouseup'));
+    }
 });
 
-// Tutup modal klik backdrop
-document.querySelectorAll('.modal-overlay').forEach(el => {
-    el.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; });
+// Tutup modal kalau klik di luar
+window.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal')) {
+        if (e.target.id === 'cropModal') {
+            cancelCrop();
+        } else {
+            e.target.style.display = 'none';
+        }
+    }
 });
 
-// ══════════════════════════════════════════
+// =============================================
 //  9. INIT
-// ══════════════════════════════════════════
+// =============================================
 window.onload = () => {
     refreshPresetDropdown();
     reloadMemberList();
