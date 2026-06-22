@@ -29,9 +29,9 @@
             <input type="text" id="songTitle" placeholder="Judul lagu...">
             <input type="text" id="ytLink" placeholder="Link YouTube...">
             <button class="btn-primary" onclick="loadVideo()">▶ Muat</button>
-            <label class="btn-ghost file-btn">
+            <label class="btn-ghost file-btn" id="mediaUploadLabel">
                 ↑ Import MP4 / Audio
-                <input type="file" id="mediaUpload" accept="video/mp4,audio/*" onchange="loadLocalMedia(this)">
+                <input type="file" id="mediaUpload" accept="video/mp4,audio/*" onchange="loadLocalMedia(this); showFileName(this, 'mediaUploadLabel', '↑ Import MP4 / Audio')">
             </label>
         </div>
 
@@ -49,9 +49,9 @@
         <div class="input-row">
             <input type="text" id="memberName" placeholder="Nama member...">
             <input type="color" id="memberColor" value="#a78bfa" title="Pilih warna">
-            <label class="btn-ghost file-btn">
+            <label class="btn-ghost file-btn" id="memberPhotoLabel">
                 🖼 Foto
-                <input type="file" id="memberPhoto" accept="image/*">
+                <input type="file" id="memberPhoto" accept="image/*" onchange="showFileName(this, 'memberPhotoLabel', '🖼 Foto')">
             </label>
             <button class="btn-primary" onclick="addNewMember()">+ Tambah</button>
         </div>
@@ -135,13 +135,13 @@
             <label class="modal-sub">Warna</label>
             <input type="color" id="editMemberColor" value="#a78bfa">
         </div>
-        <label class="btn-ghost file-btn" style="width:100%; justify-content:center;">
+        <label class="btn-ghost file-btn" style="width:100%; justify-content:center;" id="editPhotoLabel">
             🖼 Ganti Foto
-            <input type="file" id="editMemberPhoto" accept="image/*">
+            <input type="file" id="editMemberPhoto" accept="image/*" onchange="showFileName(this, 'editPhotoLabel', '🖼 Ganti Foto')">
         </label>
         <div class="modal-actions">
-            <button class="btn-ghost" onclick="closeEditModal()">Batal</button>
-            <button class="btn-primary" onclick="applyEdit()">Simpan Perubahan</button>
+            <button class="btn-ghost" type="button" onclick="closeEditModal()">Batal</button>
+            <button class="btn-primary" type="button" onclick="applyEdit()">Simpan Perubahan</button>
         </div>
     </div>
 </div>
