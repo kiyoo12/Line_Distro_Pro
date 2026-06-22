@@ -824,3 +824,34 @@ button, .file-btn {
     border: 2px solid var(--surface);
     pointer-events: none;
 }
+
+/* ══════════════════════════════════════════
+   MEMBER CARD — progress bar + inner layout
+   ══════════════════════════════════════════ */
+.member-card {
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+.member-card-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 14px;
+}
+
+.member-bar-wrap {
+    width: 100%;
+    height: 4px;
+    background: rgba(255,255,255,0.05);
+}
+
+.member-bar {
+    height: 100%;
+    border-radius: 0 2px 2px 0;
+    transition: width 0.35s cubic-bezier(.2,.8,.2,1);
+    box-shadow: 0 0 6px 1px currentColor;
+    min-width: 0%;
+}
