@@ -315,20 +315,24 @@ button, .file-btn {
 
 /* REC dot indicator */
 .rec-dot {
-    display: none;
+    display: inline-block;
     width: 8px; height: 8px;
     border-radius: 50%;
     background: #ff4d4d;
-    box-shadow: 0 0 8px 2px rgba(255,77,77,0.7);
     margin-right: 6px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    animation: none;
+}
+
+.member-card.is-active .rec-dot {
+    opacity: 1;
     animation: rec-blink 1s ease-in-out infinite;
 }
 
-.member-card.is-active .rec-dot { display: inline-block; }
-
 @keyframes rec-blink {
-    0%, 100% { opacity: 1; }
-    50%      { opacity: 0.25; }
+    0%, 100% { opacity: 1; box-shadow: 0 0 6px 2px rgba(255,77,77,0.7); }
+    50%      { opacity: 0.2; box-shadow: none; }
 }
 
 .member-info {
@@ -843,15 +847,18 @@ button, .file-btn {
 }
 
 .member-bar-wrap {
-    width: 100%;
+    width: calc(100% - 28px);
     height: 4px;
-    background: rgba(255,255,255,0.05);
+    margin: 0 14px 10px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    overflow: hidden;
 }
 
 .member-bar {
     height: 100%;
-    border-radius: 0 2px 2px 0;
+    border-radius: 4px;
     transition: width 0.35s cubic-bezier(.2,.8,.2,1);
-    box-shadow: 0 0 6px 1px currentColor;
-    min-width: 0%;
+    box-shadow: 0 0 8px 1px currentColor;
+    max-width: 100%;
 }
