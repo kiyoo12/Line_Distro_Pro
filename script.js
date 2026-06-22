@@ -15,6 +15,23 @@ function savePhotoCache() {
     localStorage.setItem('linedistro_photos', JSON.stringify(memberPhotos));
 }
 
+// ══════════════════════════════════════════
+//  SHOW FILE NAME di label
+// ══════════════════════════════════════════
+function showFileName(input, labelId, defaultText) {
+    const label = document.getElementById(labelId);
+    if (!label) return;
+    const file = input.files[0];
+    // Tampilkan hanya teks, bukan elemen input
+    const textNode = file
+        ? `📄 ${file.name.length > 22 ? file.name.substring(0, 20) + '…' : file.name}`
+        : defaultText;
+    // Ganti semua text node di label (bukan input child)
+    Array.from(label.childNodes).forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) node.textContent = ' ' + textNode;
+    });
+}
+
 function loadPhotoCache() {
     const raw = localStorage.getItem('linedistro_photos');
     if (!raw) return;
@@ -200,17 +217,22 @@ function renderMemberCard(n, c, p, d) {
     card.style.setProperty('--pulse-color', c + '66');
     card.dataset.name = n;
     card.innerHTML = `
-        <div class="member-info">
-            <span class="rank-num">#1</span>
-            <img src="${p}" class="member-avatar" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
-            <div>
-                <div class="member-name">${n}</div>
-                <span><span class="rec-dot"></span><span class="member-time" id="time-${CSS.escape(n)}">${d.toFixed(1)}s</span></span>
+        <div class="member-card-inner">
+            <div class="member-info">
+                <span class="rank-num">#1</span>
+                <img src="${p}" class="member-avatar" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
+                <div>
+                    <div class="member-name">${n}</div>
+                    <span><span class="rec-dot"></span><span class="member-time" id="time-${CSS.escape(n)}">${d.toFixed(1)}s</span></span>
+                </div>
+            </div>
+            <div class="member-actions">
+                <button class="btn-sm" onclick="resetMember('${n}')" title="Reset durasi">↺</button>
+                <button class="btn-sm del" onclick="confirmDeleteMember('${n}')" title="Hapus member">✕</button>
             </div>
         </div>
-        <div class="member-actions">
-            <button class="btn-sm" onclick="resetMember('${n}')" title="Reset durasi">↺</button>
-            <button class="btn-sm del" onclick="confirmDeleteMember('${n}')" title="Hapus member">✕</button>
+        <div class="member-bar-wrap">
+            <div class="member-bar" id="bar-${CSS.escape(n)}" style="background:${c}; width:0%;"></div>
         </div>`;
     return card;
 }
@@ -227,23 +249,39 @@ function reloadMemberList() {
 }
 
 function applyRankStyles() {
-    [...memberList.children].forEach((card, i) => {
+    const all = [...memberList.children];
+    const maxDur = Math.max(...all.map(c => memberDurations[c.dataset.name] || 0), 0.001);
+    all.forEach((card, i) => {
         card.classList.remove('rank-1', 'rank-2', 'rank-3');
         if (i === 0) card.classList.add('rank-1');
         if (i === 1) card.classList.add('rank-2');
         if (i === 2) card.classList.add('rank-3');
         const rankEl = card.querySelector('.rank-num');
         if (rankEl) rankEl.textContent = '#' + (i + 1);
+        // Update progress bar
+        const n = card.dataset.name;
+        const bar = card.querySelector('.member-bar');
+        if (bar) {
+            const pct = ((memberDurations[n] || 0) / maxDur * 100).toFixed(1);
+            bar.style.width = pct + '%';
+        }
     });
 }
 
 // Update angka waktu di leaderboard tanpa re-render/re-sort (dipanggil tiap tick saat hold)
 function updateLeaderboardLive() {
-    [...memberList.children].forEach(card => {
+    const all = [...memberList.children];
+    const maxDur = Math.max(...all.map(c => memberDurations[c.dataset.name] || 0), 0.001);
+    all.forEach(card => {
         const n = card.dataset.name;
         const el = card.querySelector('.member-time');
         if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
         card.classList.toggle('is-active', !!memberIntervals[n]);
+        const bar = card.querySelector('.member-bar');
+        if (bar) {
+            const pct = ((memberDurations[n] || 0) / maxDur * 100).toFixed(1);
+            bar.style.width = pct + '%';
+        }
     });
 }
 
@@ -389,35 +427,40 @@ function populateEditForm() {
 }
 
 async function applyEdit() {
-    const oldName = document.getElementById('editMemberSelect').value;
-    const newName = document.getElementById('editMemberName').value.trim();
-    const newColor = document.getElementById('editMemberColor').value;
-    const newPhotoFile = document.getElementById('editMemberPhoto').files[0];
+    try {
+        const oldName = document.getElementById('editMemberSelect').value;
+        const newName = document.getElementById('editMemberName').value.trim();
+        const newColor = document.getElementById('editMemberColor').value;
+        const newPhotoFile = document.getElementById('editMemberPhoto').files[0];
 
-    if (!oldName) { showToast('⚠️ Pilih member dulu'); return; }
-    if (!newName) { showToast('⚠️ Nama tidak boleh kosong'); return; }
+        if (!oldName) { showToast('⚠️ Pilih member dulu'); return; }
+        if (!newName) { showToast('⚠️ Nama tidak boleh kosong'); return; }
 
-    const newPhoto = newPhotoFile ? await fileToBase64(newPhotoFile) : memberPhotos[oldName];
+        const newPhoto = newPhotoFile ? await fileToBase64(newPhotoFile) : (memberPhotos[oldName] || `https://ui-avatars.com/api/?name=${encodeURIComponent(oldName)}&background=random`);
 
-    if (newName !== oldName) {
-        memberDurations[newName] = memberDurations[oldName];
-        memberColors[newName]    = newColor;
-        memberPhotos[newName]    = newPhoto;
-        if (memberIntervals[oldName]) { memberIntervals[newName] = memberIntervals[oldName]; }
-        memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== oldName));
-        memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== oldName));
-        memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== oldName));
-        memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== oldName));
-    } else {
-        memberColors[oldName] = newColor;
-        memberPhotos[oldName] = newPhoto;
+        if (newName !== oldName) {
+            memberDurations[newName] = memberDurations[oldName];
+            memberColors[newName]    = newColor;
+            memberPhotos[newName]    = newPhoto;
+            if (memberIntervals[oldName]) { memberIntervals[newName] = memberIntervals[oldName]; }
+            memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== oldName));
+            memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== oldName));
+            memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== oldName));
+            memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== oldName));
+        } else {
+            memberColors[oldName] = newColor;
+            memberPhotos[oldName] = newPhoto;
+        }
+
+        savePhotoCache();
+        closeEditModal();
+        reloadMemberStrip();
+        reloadMemberList();
+        showToast(`✅ ${newName} diperbarui`);
+    } catch(err) {
+        console.error('applyEdit error:', err);
+        showToast('❌ Gagal menyimpan, coba lagi');
     }
-
-    savePhotoCache();
-    closeEditModal();
-    reloadMemberStrip();
-    reloadMemberList();
-    showToast(`✅ ${newName} diperbarui`);
 }
 
 // ══════════════════════════════════════════
@@ -787,4 +830,14 @@ window.onload = () => {
     refreshPresetDropdown();
     reloadMemberStrip();
     reloadMemberList();
+
+    // Bind tombol Simpan Perubahan lewat addEventListener (fix async onclick)
+    const saveEditBtn = document.querySelector('#editModal .btn-primary');
+    if (saveEditBtn) {
+        saveEditBtn.removeAttribute('onclick');
+        saveEditBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            applyEdit();
+        });
+    }
 };
