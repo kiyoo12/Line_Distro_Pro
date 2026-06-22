@@ -25,16 +25,15 @@ function showFileName(input, labelId, defaultText) {
     const text = file
         ? `📄 ${file.name.length > 24 ? file.name.substring(0, 22) + '…' : file.name}`
         : defaultText;
-    // Pakai span khusus supaya tidak double
+    // Cari span yang sudah ada
     let span = label.querySelector('.file-label-text');
     if (!span) {
-        // Hapus semua text node lama dulu
-        Array.from(label.childNodes).forEach(node => {
-            if (node.nodeType === Node.TEXT_NODE) node.remove();
-        });
         span = document.createElement('span');
         span.className = 'file-label-text';
-        label.prepend(span);
+        // Hapus text node secara aman (snapshot dulu, baru hapus)
+        const textNodes = Array.from(label.childNodes).filter(n => n.nodeType === Node.TEXT_NODE);
+        textNodes.forEach(n => n.remove());
+        label.insertBefore(span, label.firstChild);
     }
     span.textContent = text;
 }
@@ -336,15 +335,38 @@ async function addNewMember() {
     const dup = Object.keys(memberDurations).some(k => k.toLowerCase() === n.toLowerCase());
     if (dup) { showToast(`⚠️ Member "${n}" sudah ada`); return; }
 
-    memberDurations[n] = 0;
-    memberColors[n]    = document.getElementById('memberColor').value;
+    const color = document.getElementById('memberColor').value;
     const f = document.getElementById('memberPhoto').files[0];
-    memberPhotos[n] = f
-        ? await fileToBase64(f)
-        : `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random&color=fff`;
+
+    let photoUrl;
+    if (f) {
+        // Validasi ukuran file (max 5MB)
+        if (f.size > 5 * 1024 * 1024) {
+            showToast('⚠️ Foto terlalu besar, maksimal 5MB'); return;
+        }
+        try {
+            photoUrl = await fileToBase64(f);
+        } catch (err) {
+            console.error('fileToBase64 error:', err);
+            showToast('❌ Gagal memuat foto, coba lagi');
+            return;
+        }
+    } else {
+        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random&color=fff`;
+    }
+
+    memberDurations[n] = 0;
+    memberColors[n]    = color;
+    memberPhotos[n]    = photoUrl;
 
     document.getElementById('memberName').value  = '';
     document.getElementById('memberPhoto').value = '';
+    // Reset label foto
+    const photoLabel = document.getElementById('memberPhotoLabel');
+    if (photoLabel) {
+        let span = photoLabel.querySelector('.file-label-text');
+        if (span) span.textContent = '🖼 Foto';
+    }
     savePhotoCache();
     reloadMemberStrip();
     reloadMemberList();
