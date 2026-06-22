@@ -1,12 +1,32 @@
 // ══════════════════════════════════════════
-//  PHOTO HELPER — simpan sebagai base64
+//  PHOTO HELPER — compress + resize lalu simpan base64
 // ══════════════════════════════════════════
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload  = () => resolve(r.result); // sudah berupa data:image/...;base64,...
-        r.onerror = reject;
-        r.readAsDataURL(file);
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+
+        img.onload = () => {
+            // Target max: 256x256px, kualitas 0.82
+            const MAX = 256;
+            let w = img.width;
+            let h = img.height;
+
+            if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
+            else        { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
+
+            const canvas = document.createElement('canvas');
+            canvas.width  = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+
+            URL.revokeObjectURL(objectUrl);
+            resolve(canvas.toDataURL('image/jpeg', 0.82));
+        };
+
+        img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Gagal memuat gambar')); };
+        img.src = objectUrl;
     });
 }
 
@@ -340,12 +360,8 @@ async function addNewMember() {
 
     let photoUrl;
     if (f) {
-        // Validasi ukuran file (max 5MB)
-        if (f.size > 5 * 1024 * 1024) {
-            showToast('⚠️ Foto terlalu besar, maksimal 5MB'); return;
-        }
         try {
-            photoUrl = await fileToBase64(f);
+            photoUrl = await fileToBase64(f); // auto-compress ke max 256px, JPEG 82%
         } catch (err) {
             console.error('fileToBase64 error:', err);
             showToast('❌ Gagal memuat foto, coba lagi');
