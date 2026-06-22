@@ -1,4 +1,33 @@
 // ══════════════════════════════════════════
+//  PHOTO HELPER — simpan sebagai base64
+// ══════════════════════════════════════════
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload  = () => resolve(r.result); // sudah berupa data:image/...;base64,...
+        r.onerror = reject;
+        r.readAsDataURL(file);
+    });
+}
+
+// Simpan/ambil semua foto ke localStorage (per member)
+function savePhotoCache() {
+    localStorage.setItem('linedistro_photos', JSON.stringify(memberPhotos));
+}
+
+function loadPhotoCache() {
+    const raw = localStorage.getItem('linedistro_photos');
+    if (!raw) return;
+    const cached = JSON.parse(raw);
+    // Hanya ambil yang base64 (bukan blob:// yang sudah kadaluarsa)
+    Object.entries(cached).forEach(([n, url]) => {
+        if (url && !url.startsWith('blob:')) {
+            memberPhotos[n] = url;
+        }
+    });
+}
+
+// ══════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════
 const memberList = document.getElementById('memberList');
@@ -256,7 +285,7 @@ function reorderLeaderboard() {
 // ══════════════════════════════════════════
 //  2. TAMBAH & KELOLA MEMBER
 // ══════════════════════════════════════════
-function addNewMember() {
+async function addNewMember() {
     const n = document.getElementById('memberName').value.trim();
     if (!n) { showToast('⚠️ Nama member tidak boleh kosong'); return; }
     const dup = Object.keys(memberDurations).some(k => k.toLowerCase() === n.toLowerCase());
@@ -266,11 +295,12 @@ function addNewMember() {
     memberColors[n]    = document.getElementById('memberColor').value;
     const f = document.getElementById('memberPhoto').files[0];
     memberPhotos[n] = f
-        ? URL.createObjectURL(f)
+        ? await fileToBase64(f)
         : `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random&color=fff`;
 
     document.getElementById('memberName').value  = '';
     document.getElementById('memberPhoto').value = '';
+    savePhotoCache();
     reloadMemberStrip();
     reloadMemberList();
     showToast(`✅ ${n} ditambahkan`);
@@ -358,7 +388,7 @@ function populateEditForm() {
     document.getElementById('editMemberColor').value = memberColors[n] || '#a78bfa';
 }
 
-function applyEdit() {
+async function applyEdit() {
     const oldName = document.getElementById('editMemberSelect').value;
     const newName = document.getElementById('editMemberName').value.trim();
     const newColor = document.getElementById('editMemberColor').value;
@@ -367,10 +397,12 @@ function applyEdit() {
     if (!oldName) { showToast('⚠️ Pilih member dulu'); return; }
     if (!newName) { showToast('⚠️ Nama tidak boleh kosong'); return; }
 
+    const newPhoto = newPhotoFile ? await fileToBase64(newPhotoFile) : memberPhotos[oldName];
+
     if (newName !== oldName) {
         memberDurations[newName] = memberDurations[oldName];
         memberColors[newName]    = newColor;
-        memberPhotos[newName]    = newPhotoFile ? URL.createObjectURL(newPhotoFile) : memberPhotos[oldName];
+        memberPhotos[newName]    = newPhoto;
         if (memberIntervals[oldName]) { memberIntervals[newName] = memberIntervals[oldName]; }
         memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== oldName));
         memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== oldName));
@@ -378,9 +410,10 @@ function applyEdit() {
         memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== oldName));
     } else {
         memberColors[oldName] = newColor;
-        if (newPhotoFile) memberPhotos[oldName] = URL.createObjectURL(newPhotoFile);
+        memberPhotos[oldName] = newPhoto;
     }
 
+    savePhotoCache();
     closeEditModal();
     reloadMemberStrip();
     reloadMemberList();
@@ -433,8 +466,10 @@ function loadSelectedPreset() {
         preset.forEach(m => {
             memberDurations[m.name] = 0;
             memberColors[m.name]    = m.color || '#a78bfa';
+            // Foto dari preset sudah base64, langsung pakai
             memberPhotos[m.name]    = m.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=random`;
         });
+        savePhotoCache();
         reloadMemberStrip();
         reloadMemberList();
         showToast(`✅ Preset "${name}" dimuat`);
@@ -748,6 +783,7 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 //  9. INIT
 // ══════════════════════════════════════════
 window.onload = () => {
+    loadPhotoCache();
     refreshPresetDropdown();
     reloadMemberStrip();
     reloadMemberList();
