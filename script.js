@@ -22,14 +22,21 @@ function showFileName(input, labelId, defaultText) {
     const label = document.getElementById(labelId);
     if (!label) return;
     const file = input.files[0];
-    // Tampilkan hanya teks, bukan elemen input
-    const textNode = file
-        ? `📄 ${file.name.length > 22 ? file.name.substring(0, 20) + '…' : file.name}`
+    const text = file
+        ? `📄 ${file.name.length > 24 ? file.name.substring(0, 22) + '…' : file.name}`
         : defaultText;
-    // Ganti semua text node di label (bukan input child)
-    Array.from(label.childNodes).forEach(node => {
-        if (node.nodeType === Node.TEXT_NODE) node.textContent = ' ' + textNode;
-    });
+    // Pakai span khusus supaya tidak double
+    let span = label.querySelector('.file-label-text');
+    if (!span) {
+        // Hapus semua text node lama dulu
+        Array.from(label.childNodes).forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) node.remove();
+        });
+        span = document.createElement('span');
+        span.className = 'file-label-text';
+        label.prepend(span);
+    }
+    span.textContent = text;
 }
 
 function loadPhotoCache() {
@@ -831,13 +838,16 @@ window.onload = () => {
     reloadMemberStrip();
     reloadMemberList();
 
-    // Bind tombol Simpan Perubahan lewat addEventListener (fix async onclick)
+    // Bind semua async button lewat addEventListener (fix async onclick)
     const saveEditBtn = document.querySelector('#editModal .btn-primary');
     if (saveEditBtn) {
         saveEditBtn.removeAttribute('onclick');
-        saveEditBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            applyEdit();
-        });
+        saveEditBtn.addEventListener('click', (e) => { e.preventDefault(); applyEdit(); });
+    }
+
+    const addBtn = document.getElementById('addMemberBtn');
+    if (addBtn) {
+        addBtn.removeAttribute('onclick');
+        addBtn.addEventListener('click', (e) => { e.preventDefault(); addNewMember(); });
     }
 };
