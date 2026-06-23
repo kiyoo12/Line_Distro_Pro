@@ -586,19 +586,40 @@ function refreshPresetDropdown() {
 function saveNewPreset() {
     const members = Object.keys(memberDurations);
     if (members.length === 0) { showToast('⚠️ Add a member first'); return; }
-    showPrompt({
-        icon: '💾',
-        title: 'Save Preset',
-        sub: 'Enter a name for this preset.',
-        placeholder: 'Preset name...',
-        onOk: (name) => {
-            const presets = getPresets();
-            presets[name] = members.map(n => ({ name: n, color: memberColors[n], photo: memberPhotos[n] }));
-            savePresets(presets);
-            refreshPresetDropdown();
-            showToast(`💾 Preset "${name}" saved`);
-        }
-    });
+
+    // Pakai nama dari input songTitle sebagai default, atau minta input langsung
+    const defaultName = document.getElementById('songTitle').value.trim();
+
+    // Tampilkan inline save bar
+    const bar = document.getElementById('presetSaveBar');
+    const inp = document.getElementById('presetSaveInput');
+    if (!bar || !inp) return;
+    inp.value = defaultName;
+    bar.style.display = 'flex';
+    setTimeout(() => inp.focus(), 50);
+}
+
+function doSavePreset() {
+    const inp = document.getElementById('presetSaveInput');
+    const name = inp ? inp.value.trim() : '';
+    if (!name) { showToast('⚠️ Preset name cannot be empty'); return; }
+
+    const members = Object.keys(memberDurations);
+    const presets = getPresets();
+    presets[name] = members.map(n => ({ name: n, color: memberColors[n], photo: memberPhotos[n] }));
+    savePresets(presets);
+    refreshPresetDropdown();
+
+    // Pilih preset yang baru disimpan
+    const sel = document.getElementById('presetSelect');
+    if (sel) { sel.value = name; updatePresetDropdownColor(); }
+
+    document.getElementById('presetSaveBar').style.display = 'none';
+    showToast(`💾 Preset "${name}" saved`);
+}
+
+function cancelSavePreset() {
+    document.getElementById('presetSaveBar').style.display = 'none';
 }
 
 function updatePresetDropdownColor() {
@@ -1110,4 +1131,13 @@ window.onload = () => {
     }
 
     updateTotalDuration();
+
+    // Enter key untuk preset save bar
+    const presetSaveInput = document.getElementById('presetSaveInput');
+    if (presetSaveInput) {
+        presetSaveInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') doSavePreset();
+            if (e.key === 'Escape') cancelSavePreset();
+        });
+    }
 };
