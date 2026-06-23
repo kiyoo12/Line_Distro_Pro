@@ -44,6 +44,11 @@
             <button class="btn-danger-soft" onclick="deleteSelectedPreset()">🗑 Delete</button>
             <button class="btn-ghost" onclick="openEditMenu()">✏️ Edit Member</button>
         </div>
+        <div class="input-row preset-save-bar" id="presetSaveBar" style="display:none;">
+            <input type="text" id="presetSaveInput" placeholder="Preset name..." style="flex:1;">
+            <button class="btn-primary" onclick="doSavePreset()">✓ Save</button>
+            <button class="btn-ghost" onclick="cancelSavePreset()">✕ Cancel</button>
+        </div>
 
         <p class="panel-label" style="margin-top:18px;">ADD MEMBERS</p>
         <div class="input-row">
