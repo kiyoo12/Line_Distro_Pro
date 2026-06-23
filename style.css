@@ -865,3 +865,215 @@ button, .file-btn {
     box-shadow: 0 0 8px 1px currentColor;
     max-width: 100%;
 }
+
+/* ══════════════════════════════════════════
+   UNDO TOAST
+   ══════════════════════════════════════════ */
+.toast { display: flex; align-items: center; gap: 12px; }
+
+.toast-undo-btn {
+    height: 26px;
+    padding: 0 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--purple);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: 'Inter', sans-serif;
+    transition: filter 0.15s;
+}
+.toast-undo-btn:hover { filter: brightness(1.15); }
+
+/* ══════════════════════════════════════════
+   STRIP TOOLTIP
+   ══════════════════════════════════════════ */
+.strip-item { position: relative; }
+
+.strip-tooltip {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s, transform 0.18s;
+    transform: translateX(-50%) translateY(4px);
+    z-index: 10;
+}
+
+.strip-item:hover .strip-tooltip {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* ══════════════════════════════════════════
+   MODAL TOPBAR FIX
+   ══════════════════════════════════════════ */
+.modal-topbar {
+    flex-direction: row !important;
+}
+.modal-topbar h3 { text-align: left !important; }
+
+/* ══════════════════════════════════════════
+   PRESENTATION MODE
+   ══════════════════════════════════════════ */
+.press-overlay {
+    position: fixed;
+    inset: 0;
+    background: #080810;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+}
+
+.press-inner {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+}
+
+.press-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.press-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(90deg, var(--purple), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.press-close {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.18s;
+}
+.press-close:hover { border-color: var(--danger); color: var(--danger); }
+
+.press-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.press-row {
+    display: grid;
+    grid-template-columns: 220px 1fr 120px;
+    align-items: center;
+    gap: 16px;
+}
+
+.press-member-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.press-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border2);
+}
+
+.press-badge { font-size: 18px; }
+
+.press-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.press-bar-wrap {
+    height: 20px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.press-bar {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.3s cubic-bezier(.2,.8,.2,1);
+    box-shadow: 0 0 12px 1px currentColor;
+    min-width: 2px;
+}
+
+.press-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.press-time {
+    font-family: 'Space Grotesk', monospace;
+    font-size: 16px;
+    color: var(--cyan);
+    min-width: 52px;
+    text-align: right;
+}
+
+.press-pct {
+    font-size: 13px;
+    color: var(--text3);
+    min-width: 40px;
+    text-align: right;
+}
+
+/* ══════════════════════════════════════════
+   RANK BADGE — angka dengan warna ranking
+   ══════════════════════════════════════════ */
+.rank-badge {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 22px;
+    text-align: center;
+    color: var(--text3);
+}
+
+/* Warna khusus top 3 */
+.rank-item:nth-child(1) .rank-badge { color: #fbbf24; }
+.rank-item:nth-child(2) .rank-badge { color: #cbd5e1; }
+.rank-item:nth-child(3) .rank-badge { color: #d97706; }
+
+.press-badge {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    min-width: 26px;
+    text-align: center;
+    color: var(--text3);
+}
+
+.press-row:nth-child(1) .press-badge { color: #fbbf24; }
+.press-row:nth-child(2) .press-badge { color: #cbd5e1; }
+.press-row:nth-child(3) .press-badge { color: #d97706; }
