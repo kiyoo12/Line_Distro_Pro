@@ -296,7 +296,7 @@ function renderMemberCard(n, c, p, d) {
     card.innerHTML = `
         <div class="member-card-inner">
             <div class="member-info">
-                <span class="rank-num">#1</span>
+                <span class="rank-num">1</span>
                 <img src="${p}" class="member-avatar" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
                 <div>
                     <div class="member-name">${n}</div>
@@ -334,7 +334,7 @@ function applyRankStyles() {
         if (i === 1) card.classList.add('rank-2');
         if (i === 2) card.classList.add('rank-3');
         const rankEl = card.querySelector('.rank-num');
-        if (rankEl) rankEl.textContent = '#' + (i + 1);
+        if (rankEl) rankEl.textContent = (i + 1);
         // Update progress bar
         const n = card.dataset.name;
         const bar = card.querySelector('.member-bar');
@@ -1101,4 +1101,13 @@ window.onload = () => {
         addBtn.removeAttribute('onclick');
         addBtn.addEventListener('click', (e) => { e.preventDefault(); addNewMember(); });
     }
+
+    // Bind prompt modal Save button
+    const promptSaveBtn = document.getElementById('promptSaveBtn');
+    if (promptSaveBtn) {
+        promptSaveBtn.removeAttribute('onclick');
+        promptSaveBtn.addEventListener('click', (e) => { e.preventDefault(); confirmPrompt(); });
+    }
+
+    updateTotalDuration();
 };
