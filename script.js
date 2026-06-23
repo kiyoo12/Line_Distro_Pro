@@ -1,4 +1,14 @@
 // ══════════════════════════════════════════
+//  TOTAL DURASI LIVE
+// ══════════════════════════════════════════
+function updateTotalDuration() {
+    const el = document.getElementById('totalDurationDisplay');
+    if (!el) return;
+    const total = Object.values(memberDurations).reduce((a, b) => a + b, 0);
+    el.textContent = `Total: ${total.toFixed(1)}s`;
+}
+
+// ══════════════════════════════════════════
 //  PHOTO HELPER — compress + resize lalu simpan base64
 // ══════════════════════════════════════════
 function fileToBase64(file) {
@@ -81,6 +91,39 @@ let chartInstance = null;
 // ══════════════════════════════════════════
 //  TOAST (pengganti alert)
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+//  UNDO TOAST
+// ══════════════════════════════════════════
+let _undoTimer = null;
+let _undoCallback = null;
+
+function showUndoToast(msg, onUndo, duration = 3000) {
+    const t = document.getElementById('toast');
+    t.innerHTML = `<span>${msg}</span><button class="toast-undo-btn" onclick="triggerUndo()">Undo</button>`;
+    t.style.display = 'flex';
+    t.style.alignItems = 'center';
+    t.style.gap = '12px';
+    requestAnimationFrame(() => t.classList.add('show'));
+    clearTimeout(t._timer);
+    if (_undoTimer) clearTimeout(_undoTimer);
+    _undoCallback = onUndo;
+    _undoTimer = setTimeout(() => {
+        _undoCallback = null;
+        t.classList.remove('show');
+        setTimeout(() => { t.style.display = 'none'; t.innerHTML = ''; }, 300);
+    }, duration);
+}
+
+function triggerUndo() {
+    clearTimeout(_undoTimer);
+    const cb = _undoCallback;
+    _undoCallback = null;
+    const t = document.getElementById('toast');
+    t.classList.remove('show');
+    setTimeout(() => { t.style.display = 'none'; t.innerHTML = ''; }, 300);
+    if (cb) cb();
+}
+
 function showToast(msg, duration = 2800) {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -166,13 +209,16 @@ function renderStripItem(n, c, p, index) {
     item.dataset.name = n;
     item.style.setProperty('--strip-color', c);
     const keyBadge = index < 9 ? `<span class="strip-key">${index + 1}</span>` : '';
+    const tooltip = index < 9 ? `Hold [${index+1}] to record` : `Hold to record`;
+    item.title = tooltip;
     item.innerHTML = `
         <div class="strip-avatar-wrap">
             <img src="${p}" class="strip-avatar" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
             ${keyBadge}
         </div>
         <div class="strip-name">${n}</div>
-        <div class="strip-time" id="strip-time-${CSS.escape(n)}">${(memberDurations[n]||0).toFixed(1)}s</div>`;
+        <div class="strip-time" id="strip-time-${CSS.escape(n)}">${(memberDurations[n]||0).toFixed(1)}s</div>
+        <div class="strip-tooltip">${tooltip}</div>`;
     memberStrip.appendChild(item);
 
     const wrap = item.querySelector('.strip-avatar-wrap');
@@ -203,6 +249,8 @@ function renderStripItem(n, c, p, index) {
             memberDurations[n] = startDuration + elapsed;
             timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
             updateLeaderboardLive();
+            updateTotalDuration();
+            updatePresentationLive();
             if (Date.now() - lastReorder > 400) {
                 lastReorder = Date.now();
                 reorderLeaderboard();
@@ -394,10 +442,17 @@ async function addNewMember() {
 
 function resetMember(n) {
     if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
+    const prevDuration = memberDurations[n];
     memberDurations[n] = 0;
     reloadMemberStrip();
     reloadMemberList();
-    showToast(`↺ Reset ${n}`);
+    // Undo toast — 3 detik untuk batalkan
+    showUndoToast(`↺ Reset ${n}`, () => {
+        memberDurations[n] = prevDuration;
+        reloadMemberStrip();
+        reloadMemberList();
+        showToast(`↩ Undo reset ${n}`);
+    });
 }
 
 function confirmDeleteMember(n) {
@@ -546,9 +601,22 @@ function saveNewPreset() {
     });
 }
 
+function updatePresetDropdownColor() {
+    const sel = document.getElementById('presetSelect');
+    const name = sel.value;
+    if (!name) { sel.style.borderColor = ''; return; }
+    const preset = getPresets()[name];
+    if (!preset || preset.length === 0) return;
+    // Ambil warna member pertama di preset
+    const firstColor = preset[0].color || '#a78bfa';
+    sel.style.borderColor = firstColor;
+    sel.style.boxShadow = `0 0 0 2px ${firstColor}22`;
+}
+
 function loadSelectedPreset() {
     const name = document.getElementById('presetSelect').value;
     if (!name) return;
+    updatePresetDropdownColor();
     const preset = getPresets()[name];
     if (!preset) return;
 
@@ -660,7 +728,7 @@ function finish() {
     lb.innerHTML = '';
     sorted.forEach((n, i) => {
         const pct  = ((memberDurations[n] / total) * 100).toFixed(1);
-        const badge = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+        const badge = `${i+1}`;
         const item  = document.createElement('div');
         item.className = 'rank-item';
         item.style.borderLeftColor = memberColors[n];
@@ -736,6 +804,62 @@ function saveToHistory(title, sorted, durations, colors, photos, total) {
     saveHistory(history);
 }
 
+function getMemberStats(memberName) {
+    const history = getHistory();
+    return history
+        .filter(e => e.members.some(m => m.name === memberName))
+        .map(e => {
+            const m = e.members.find(x => x.name === memberName);
+            return { title: e.title, date: e.date, duration: m.duration, pct: parseFloat(m.pct) };
+        })
+        .reverse(); // oldest first for chart
+}
+
+function openMemberStats(memberName) {
+    const stats = getMemberStats(memberName);
+    if (stats.length < 2) { showToast('⚠️ Need at least 2 history entries'); return; }
+    const modal = document.getElementById('memberStatsModal');
+    document.getElementById('statsModalTitle').textContent = `📈 ${memberName}`;
+    const canvas = document.getElementById('memberStatsChart');
+    if (window._statsChart) window._statsChart.destroy();
+    window._statsChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: stats.map(s => s.title.length > 12 ? s.title.substring(0,11)+'…' : s.title),
+            datasets: [{
+                label: 'Duration (s)',
+                data: stats.map(s => s.duration.toFixed(1)),
+                borderColor: memberColors[memberName] || '#a78bfa',
+                backgroundColor: (memberColors[memberName] || '#a78bfa') + '22',
+                fill: true, tension: 0.4, pointRadius: 5,
+                pointBackgroundColor: memberColors[memberName] || '#a78bfa',
+            }, {
+                label: 'Share (%)',
+                data: stats.map(s => s.pct),
+                borderColor: '#67e8f9',
+                backgroundColor: '#67e8f922',
+                fill: false, tension: 0.4, pointRadius: 5,
+                pointBackgroundColor: '#67e8f9',
+                yAxisID: 'y2',
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#9490b0', font: { size: 11 } } } },
+            scales: {
+                x: { ticks: { color: '#9490b0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: { ticks: { color: '#9490b0' }, grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'Seconds', color: '#9490b0' } },
+                y2: { position: 'right', ticks: { color: '#67e8f9' }, grid: { display: false }, title: { display: true, text: '%', color: '#67e8f9' } }
+            }
+        }
+    });
+    modal.style.display = 'flex';
+}
+
+function closeMemberStatsModal() {
+    document.getElementById('memberStatsModal').style.display = 'none';
+}
+
 function openHistory() {
     const history = getHistory();
     const container = document.getElementById('historyList');
@@ -747,7 +871,7 @@ function openHistory() {
         history.forEach(entry => {
             const card = document.createElement('div');
             card.className = 'history-card';
-            const badge = i => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+            const badge = i => `${i+1}`;
             card.innerHTML = `
                 <div class="history-card-header" onclick="toggleHistoryDetail(${entry.id})">
                     <div>
@@ -767,7 +891,7 @@ function openHistory() {
                 <div class="history-detail" id="detail-${entry.id}">
                     <div style="padding-top:10px; display:flex; flex-direction:column; gap:6px;">
                         ${entry.members.map((m, i) => `
-                            <div class="rank-item" style="border-left-color:${m.color};">
+                            <div class="rank-item" style="border-left-color:${m.color}; cursor:pointer;" onclick="openMemberStats('${m.name.replace(/'/g,"\'")}')">
                                 <div class="rank-name">
                                     <img src="${m.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;"
                                          onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'">
@@ -777,6 +901,7 @@ function openHistory() {
                                 <div class="rank-meta">
                                     <span class="rank-time">${m.duration.toFixed(1)}s</span>
                                     <span class="rank-pct">${m.pct}%</span>
+                                    <span style="color:var(--text3);font-size:11px;margin-left:4px;">📈</span>
                                 </div>
                             </div>`).join('')}
                     </div>
@@ -881,6 +1006,83 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 // ══════════════════════════════════════════
 //  9. INIT
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+//  MODE PRESENTASI
+// ══════════════════════════════════════════
+function openPresentation() {
+    const names = Object.keys(memberDurations);
+    if (names.length === 0) { showToast('⚠️ No members to present'); return; }
+    const overlay = document.getElementById('presentationOverlay');
+    overlay.style.display = 'flex';
+    renderPresentationBars();
+}
+
+function closePresentation() {
+    document.getElementById('presentationOverlay').style.display = 'none';
+}
+
+function renderPresentationBars() {
+    const container = document.getElementById('pressBars');
+    container.innerHTML = '';
+    const names = Object.keys(memberDurations);
+    const total = Object.values(memberDurations).reduce((a, b) => a + b, 0) || 1;
+    const maxDur = Math.max(...Object.values(memberDurations), 0.001);
+    const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
+    const title = document.getElementById('songTitle').value.trim() || 'Line Distribution';
+    document.getElementById('pressSongTitle').textContent = title;
+
+    sorted.forEach((n, i) => {
+        const pct = ((memberDurations[n] / total) * 100).toFixed(1);
+        const barPct = ((memberDurations[n] / maxDur) * 100).toFixed(1);
+        const badge = `${i+1}`;
+        const row = document.createElement('div');
+        row.className = 'press-row';
+        row.dataset.name = n;
+        row.innerHTML = `
+            <div class="press-member-info">
+                <img src="${memberPhotos[n]}" class="press-avatar"
+                     onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
+                <span class="press-badge">${badge}</span>
+                <span class="press-name">${n}</span>
+            </div>
+            <div class="press-bar-wrap">
+                <div class="press-bar" style="width:${barPct}%; background:${memberColors[n]};"></div>
+            </div>
+            <div class="press-meta">
+                <span class="press-time">${memberDurations[n].toFixed(1)}s</span>
+                <span class="press-pct">${pct}%</span>
+            </div>`;
+        container.appendChild(row);
+    });
+}
+
+// Update presentation bars real-time saat rekam
+function updatePresentationLive() {
+    const overlay = document.getElementById('presentationOverlay');
+    if (!overlay || overlay.style.display === 'none') return;
+    const names = Object.keys(memberDurations);
+    const total = Object.values(memberDurations).reduce((a, b) => a + b, 0) || 1;
+    const maxDur = Math.max(...Object.values(memberDurations), 0.001);
+    names.forEach(n => {
+        const row = document.querySelector(`.press-row[data-name="${n}"]`);
+        if (!row) return;
+        const bar = row.querySelector('.press-bar');
+        const timeEl = row.querySelector('.press-time');
+        const pctEl  = row.querySelector('.press-pct');
+        if (bar) bar.style.width = ((memberDurations[n] / maxDur) * 100).toFixed(1) + '%';
+        if (timeEl) timeEl.textContent = memberDurations[n].toFixed(1) + 's';
+        if (pctEl) pctEl.textContent = ((memberDurations[n] / total) * 100).toFixed(1) + '%';
+    });
+    // Reorder rows
+    const container = document.getElementById('pressBars');
+    const rows = [...container.children];
+    const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
+    sorted.forEach(n => {
+        const row = rows.find(r => r.dataset.name === n);
+        if (row) container.appendChild(row);
+    });
+}
+
 window.onload = () => {
     loadPhotoCache();
     refreshPresetDropdown();
