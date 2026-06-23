@@ -50,7 +50,7 @@ function showFileName(input, labelId, defaultText) {
     if (!span) {
         span = document.createElement('span');
         span.className = 'file-label-text';
-        // Hapus text node secara aman (snapshot dulu, baru hapus)
+        // Delete text node secara aman (snapshot dulu, baru hapus)
         const textNodes = Array.from(label.childNodes).filter(n => n.nodeType === Node.TEXT_NODE);
         textNodes.forEach(n => n.remove());
         label.insertBefore(span, label.firstChild);
@@ -145,7 +145,7 @@ function closePrompt() {
 
 function confirmPrompt() {
     const val = document.getElementById('promptInput').value.trim();
-    if (!val) { showToast('⚠️ Nama tidak boleh kosong'); return; }
+    if (!val) { showToast('⚠️ Name cannot be empty'); return; }
     closePrompt();
     if (_promptCallback) _promptCallback(val);
 }
@@ -217,6 +217,9 @@ function renderStripItem(n, c, p, index) {
         clearInterval(rippleInterval);
         rippleInterval = null;
         item.classList.remove('holding');
+        // Pastikan kartu leaderboard juga hapus is-active + rec-dot
+        const card = [...memberList.children].find(c => c.dataset.name === n);
+        if (card) card.classList.remove('is-active');
         reorderLeaderboard();
     }
 
@@ -254,7 +257,7 @@ function renderMemberCard(n, c, p, d) {
             </div>
             <div class="member-actions">
                 <button class="btn-sm" onclick="resetMember('${n}')" title="Reset durasi">↺</button>
-                <button class="btn-sm del" onclick="confirmDeleteMember('${n}')" title="Hapus member">✕</button>
+                <button class="btn-sm del" onclick="confirmDeleteMember('${n}')" title="Delete member">✕</button>
             </div>
         </div>
         <div class="member-bar-wrap">
@@ -351,9 +354,9 @@ function reorderLeaderboard() {
 // ══════════════════════════════════════════
 async function addNewMember() {
     const n = document.getElementById('memberName').value.trim();
-    if (!n) { showToast('⚠️ Nama member tidak boleh kosong'); return; }
+    if (!n) { showToast('⚠️ Member name cannot be empty'); return; }
     const dup = Object.keys(memberDurations).some(k => k.toLowerCase() === n.toLowerCase());
-    if (dup) { showToast(`⚠️ Member "${n}" sudah ada`); return; }
+    if (dup) { showToast(`⚠️ Member "${n}" already exists`); return; }
 
     const color = document.getElementById('memberColor').value;
     const f = document.getElementById('memberPhoto').files[0];
@@ -364,7 +367,7 @@ async function addNewMember() {
             photoUrl = await fileToBase64(f); // auto-compress ke max 256px, JPEG 82%
         } catch (err) {
             console.error('fileToBase64 error:', err);
-            showToast('❌ Gagal memuat foto, coba lagi');
+            showToast('❌ Failed to load photo, please try again');
             return;
         }
     } else {
@@ -386,7 +389,7 @@ async function addNewMember() {
     savePhotoCache();
     reloadMemberStrip();
     reloadMemberList();
-    showToast(`✅ ${n} ditambahkan`);
+    showToast(`✅ ${n} added`);
 }
 
 function resetMember(n) {
@@ -400,9 +403,9 @@ function resetMember(n) {
 function confirmDeleteMember(n) {
     showConfirm({
         icon: '🗑',
-        title: `Hapus ${n}?`,
-        msg: 'Durasi yang sudah direkam akan hilang.',
-        okLabel: 'Hapus',
+        title: `Delete ${n}?`,
+        msg: 'Recorded durations will be lost.',
+        okLabel: 'Delete',
         okClass: 'btn-danger',
         onOk: () => deleteMember(n)
     });
@@ -416,15 +419,15 @@ function deleteMember(n) {
     memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== n));
     reloadMemberStrip();
     reloadMemberList();
-    showToast(`🗑 ${n} dihapus`);
+    showToast(`🗑 ${n} deleted`);
 }
 
 function confirmResetAll() {
-    if (Object.keys(memberDurations).length === 0) { showToast('⚠️ Belum ada member'); return; }
+    if (Object.keys(memberDurations).length === 0) { showToast('⚠️ No members yet'); return; }
     showConfirm({
         icon: '↺',
-        title: 'Reset semua durasi?',
-        msg: 'Semua waktu rekaman akan kembali ke 0.',
+        title: 'Reset all durations?',
+        msg: 'All recorded times will reset to 0.',
         okLabel: 'Reset',
         okClass: 'btn-primary',
         onOk: () => {
@@ -434,7 +437,7 @@ function confirmResetAll() {
             });
             reloadMemberStrip();
             reloadMemberList();
-            showToast('↺ Semua durasi direset');
+            showToast('↺ All durations reset');
         }
     });
 }
@@ -445,7 +448,7 @@ function confirmResetAll() {
 function refreshEditDropdown() {
     const sel = document.getElementById('editMemberSelect');
     const cur = sel.value;
-    sel.innerHTML = '<option value="">— Pilih member —</option>';
+    sel.innerHTML = '<option value="">— Select member —</option>';
     Object.keys(memberDurations).forEach(n => {
         const o = document.createElement('option');
         o.value = n; o.textContent = n;
@@ -455,7 +458,7 @@ function refreshEditDropdown() {
 }
 
 function openEditMenu() {
-    if (Object.keys(memberDurations).length === 0) { showToast('⚠️ Belum ada member'); return; }
+    if (Object.keys(memberDurations).length === 0) { showToast('⚠️ No members yet'); return; }
     refreshEditDropdown();
     document.getElementById('editModal').style.display = 'flex';
 }
@@ -478,8 +481,8 @@ async function applyEdit() {
         const newColor = document.getElementById('editMemberColor').value;
         const newPhotoFile = document.getElementById('editMemberPhoto').files[0];
 
-        if (!oldName) { showToast('⚠️ Pilih member dulu'); return; }
-        if (!newName) { showToast('⚠️ Nama tidak boleh kosong'); return; }
+        if (!oldName) { showToast('⚠️ Select a member first'); return; }
+        if (!newName) { showToast('⚠️ Name cannot be empty'); return; }
 
         const newPhoto = newPhotoFile ? await fileToBase64(newPhotoFile) : (memberPhotos[oldName] || `https://ui-avatars.com/api/?name=${encodeURIComponent(oldName)}&background=random`);
 
@@ -501,10 +504,10 @@ async function applyEdit() {
         closeEditModal();
         reloadMemberStrip();
         reloadMemberList();
-        showToast(`✅ ${newName} diperbarui`);
+        showToast(`✅ ${newName} updated`);
     } catch(err) {
         console.error('applyEdit error:', err);
-        showToast('❌ Gagal menyimpan, coba lagi');
+        showToast('❌ Failed to save, please try again');
     }
 }
 
@@ -517,7 +520,7 @@ function savePresets(d) { localStorage.setItem('linedistro_presets', JSON.string
 function refreshPresetDropdown() {
     const sel = document.getElementById('presetSelect');
     const presets = getPresets();
-    sel.innerHTML = '<option value="">— Pilih preset —</option>';
+    sel.innerHTML = '<option value="">— Select preset —</option>';
     Object.keys(presets).forEach(name => {
         const o = document.createElement('option');
         o.value = name; o.textContent = name;
@@ -527,18 +530,18 @@ function refreshPresetDropdown() {
 
 function saveNewPreset() {
     const members = Object.keys(memberDurations);
-    if (members.length === 0) { showToast('⚠️ Tambahkan member dulu'); return; }
+    if (members.length === 0) { showToast('⚠️ Add a member first'); return; }
     showPrompt({
         icon: '💾',
-        title: 'Simpan Preset',
-        sub: 'Beri nama untuk preset ini.',
-        placeholder: 'Nama preset...',
+        title: 'Save Preset',
+        sub: 'Enter a name for this preset.',
+        placeholder: 'Preset name...',
         onOk: (name) => {
             const presets = getPresets();
             presets[name] = members.map(n => ({ name: n, color: memberColors[n], photo: memberPhotos[n] }));
             savePresets(presets);
             refreshPresetDropdown();
-            showToast(`💾 Preset "${name}" disimpan`);
+            showToast(`💾 Preset "${name}" saved`);
         }
     });
 }
@@ -560,15 +563,15 @@ function loadSelectedPreset() {
         savePhotoCache();
         reloadMemberStrip();
         reloadMemberList();
-        showToast(`✅ Preset "${name}" dimuat`);
+        showToast(`✅ Preset "${name}" loaded`);
     };
 
     if (Object.keys(memberDurations).length > 0) {
         showConfirm({
             icon: '📂',
-            title: `Muat "${name}"?`,
-            msg: 'Member saat ini akan diganti dengan preset ini.',
-            okLabel: 'Muat',
+            title: `Load "${name}"?`,
+            msg: 'Current members will be replaced by this preset.',
+            okLabel: 'Load',
             okClass: 'btn-primary',
             onOk: doLoad
         });
@@ -579,19 +582,19 @@ function loadSelectedPreset() {
 
 function deleteSelectedPreset() {
     const name = document.getElementById('presetSelect').value;
-    if (!name) { showToast('⚠️ Pilih preset dulu'); return; }
+    if (!name) { showToast('⚠️ Select a preset first'); return; }
     showConfirm({
         icon: '🗑',
-        title: `Hapus preset "${name}"?`,
-        msg: 'Preset ini akan dihapus permanen.',
-        okLabel: 'Hapus',
+        title: `Delete preset "${name}"?`,
+        msg: 'This preset will be permanently deleted.',
+        okLabel: 'Delete',
         okClass: 'btn-danger',
         onOk: () => {
             const presets = getPresets();
             delete presets[name];
             savePresets(presets);
             refreshPresetDropdown();
-            showToast(`🗑 Preset "${name}" dihapus`);
+            showToast(`🗑 Preset "${name}" deleted`);
         }
     });
 }
@@ -637,12 +640,20 @@ function loadVideo() {
 // ══════════════════════════════════════════
 function finish() {
     const names = Object.keys(memberDurations);
-    if (names.length === 0) { showToast('⚠️ Belum ada member'); return; }
+    if (names.length === 0) { showToast('No members added yet'); return; }
     const total = Object.values(memberDurations).reduce((a, b) => a + b, 0);
-    if (total === 0) { showToast('⚠️ Semua durasi masih 0, rekam dulu!'); return; }
+    if (total === 0) { showToast('All durations are 0 — record first!'); return; }
+    // Stop semua rekaman yang masih berjalan
+    Object.keys(memberIntervals).forEach(n => {
+        if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
+        const card = [...memberList.children].find(c => c.dataset.name === n);
+        if (card) card.classList.remove('is-active');
+        const si = memberStrip.querySelector(`.strip-item[data-name="${n}"]`);
+        if (si) si.classList.remove('holding');
+    });
 
     const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
-    const title  = document.getElementById('songTitle').value.trim() || 'Tanpa Judul';
+    const title  = document.getElementById('songTitle').value.trim() || 'Untitled';
 
     // Leaderboard
     const lb = document.getElementById('leaderboard');
@@ -668,7 +679,7 @@ function finish() {
     });
 
     document.getElementById('resultSongTitle').textContent = `🎵 ${title}`;
-    document.getElementById('resultDateLabel').textContent = new Date().toLocaleString('id-ID');
+    document.getElementById('resultDateLabel').textContent = new Date().toLocaleString('en-US');
 
     if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(document.getElementById('resultChart'), {
@@ -715,7 +726,7 @@ function saveToHistory(title, sorted, durations, colors, photos, total) {
     history.unshift({
         id: Date.now(),
         title,
-        date: new Date().toLocaleString('id-ID'),
+        date: new Date().toLocaleString('en-US'),
         totalDuration: total,
         members: sorted.map(n => ({
             name: n, duration: durations[n], color: colors[n], photo: photos[n],
@@ -731,7 +742,7 @@ function openHistory() {
     container.innerHTML = '';
 
     if (history.length === 0) {
-        container.innerHTML = '<p style="color:var(--text3);text-align:center;padding:30px 0;font-size:13px;">Belum ada riwayat.</p>';
+        container.innerHTML = '<p style="color:var(--text3);text-align:center;padding:30px 0;font-size:13px;">No history yet.</p>';
     } else {
         history.forEach(entry => {
             const card = document.createElement('div');
@@ -770,7 +781,7 @@ function openHistory() {
                             </div>`).join('')}
                     </div>
                     <button class="btn-danger-soft" style="width:100%;justify-content:center;margin-top:10px;"
-                            onclick="confirmDeleteHistoryEntry(${entry.id})">🗑 Hapus Riwayat Ini</button>
+                            onclick="confirmDeleteHistoryEntry(${entry.id})">🗑 Delete Entry</button>
                 </div>`;
             container.appendChild(card);
         });
@@ -789,23 +800,23 @@ function toggleHistoryDetail(id) {
 
 function confirmDeleteHistoryEntry(id) {
     showConfirm({
-        icon: '🗑', title: 'Hapus riwayat ini?',
-        msg: 'Data rekaman ini tidak bisa dikembalikan.',
-        okLabel: 'Hapus', okClass: 'btn-danger',
+        icon: '🗑', title: 'Delete riwayat ini?',
+        msg: 'This recording data cannot be recovered.',
+        okLabel: 'Delete', okClass: 'btn-danger',
         onOk: () => {
             saveHistory(getHistory().filter(e => e.id !== id));
             openHistory();
-            showToast('🗑 Riwayat dihapus');
+            showToast('🗑 History entry deleted');
         }
     });
 }
 
 function confirmClearHistory() {
     showConfirm({
-        icon: '🗑', title: 'Hapus semua riwayat?',
-        msg: 'Seluruh riwayat rekaman akan dihapus permanen.',
-        okLabel: 'Hapus Semua', okClass: 'btn-danger',
-        onOk: () => { saveHistory([]); openHistory(); showToast('🗑 Semua riwayat dihapus'); }
+        icon: '🗑', title: 'Delete semua riwayat?',
+        msg: 'All recording history will be permanently deleted.',
+        okLabel: 'Delete Semua', okClass: 'btn-danger',
+        onOk: () => { saveHistory([]); openHistory(); showToast('🗑 All history cleared'); }
     });
 }
 
