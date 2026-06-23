@@ -252,7 +252,9 @@ button, .file-btn {
     border-radius: var(--radius-sm);
     padding: 10px 14px;
     border-left: 4px solid var(--purple);
-    transition: background 0.4s ease, box-shadow 0.4s ease, transform 0.4s cubic-bezier(.2,.8,.2,1);
+    transition: background 0.35s ease,
+                box-shadow 0.35s ease,
+                transform 0.35s cubic-bezier(.2,.8,.2,1);
     overflow: hidden;
 }
 
@@ -261,10 +263,9 @@ button, .file-btn {
     box-shadow: 0 0 0 1px var(--pulse-color, var(--border2)), 0 0 28px -4px var(--pulse-color, rgba(167,139,250,0.5));
     transform: scale(1.015);
     z-index: 1;
-    /* Masuk: delay sedikit biar terasa smooth */
-    transition: background 0.35s 0.05s ease,
-                box-shadow 0.45s 0.05s ease,
-                transform 0.45s 0.05s cubic-bezier(.2,.8,.2,1);
+    transition: background 0.35s ease,
+                box-shadow 0.35s ease,
+                transform 0.35s cubic-bezier(.2,.8,.2,1);
 }
 
 /* Progress bar bawah kartu - tumbuh terus saat rekam */
@@ -327,16 +328,14 @@ button, .file-btn {
     opacity: 0;
     box-shadow: none;
     animation: none !important;
-    /* Keluar: cepat */
-    transition: opacity 0.2s ease, box-shadow 0.2s ease;
+    transition: opacity 0.35s ease, box-shadow 0.35s ease;
 }
 
 .member-card.is-active .rec-dot {
     opacity: 1;
     box-shadow: 0 0 6px 2px rgba(255,77,77,0.6);
     animation: rec-blink 1.2s ease-in-out infinite !important;
-    /* Muncul: delay 0.15s biar tidak kedip terlalu tiba-tiba */
-    transition: opacity 0.3s 0.15s ease, box-shadow 0.3s 0.15s ease;
+    transition: opacity 0.35s ease, box-shadow 0.35s ease;
 }
 
 @keyframes rec-blink {
@@ -771,13 +770,13 @@ button, .file-btn {
 
 .strip-item.holding .strip-avatar-wrap {
     transform: scale(0.92);
-    transition: transform 0.3s 0.05s cubic-bezier(.2,.8,.2,1);
+    transition: transform 0.35s cubic-bezier(.2,.8,.2,1);
 }
 .strip-item.holding .strip-avatar-wrap::before {
     opacity: 1;
     box-shadow: 0 0 18px 2px var(--strip-color, rgba(167,139,250,0.7));
-    animation: hold-bob 0.7s 0.1s ease-in-out infinite alternate;
-    transition: opacity 0.3s 0.05s, box-shadow 0.4s 0.05s;
+    animation: hold-bob 0.7s ease-in-out infinite alternate;
+    transition: opacity 0.35s ease, box-shadow 0.35s ease;
 }
 
 .strip-name {
