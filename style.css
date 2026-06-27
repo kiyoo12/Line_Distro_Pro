@@ -5,10 +5,10 @@
     --bg:        #0d0d14;
     --bg2:       #13131f;
     --bg3:       #1a1a2e;
-    --surface:   #1e1e30;
-    --surface2:  #252540;
-    --border:    rgba(120,100,255,0.15);
-    --border2:   rgba(120,100,255,0.3);
+    --surface:   #16162a;
+    --surface2:  #1e1e38;
+    --border:    rgba(120,100,255,0.12);
+    --border2:   rgba(120,100,255,0.28);
 
     --purple:    #a78bfa;
     --purple2:   #7c3aed;
@@ -34,6 +34,9 @@
 
 body {
     background: var(--bg);
+    background-image:
+        radial-gradient(ellipse 80% 50% at 20% 0%, rgba(124,58,237,0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(29,78,216,0.06) 0%, transparent 60%);
     color: var(--text);
     font-family: 'Inter', sans-serif;
     font-size: 14px;
@@ -58,10 +61,11 @@ input[type="color"] {
    ══════════════════════════════════════════ */
 .app-header {
     width: 100%;
-    background: linear-gradient(90deg, var(--bg2) 0%, #16103a 100%);
-    border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, #0e0e1f 0%, #130d2e 40%, #0a1628 100%);
+    border-bottom: 1px solid rgba(120,100,255,0.2);
     padding: 0 24px;
     position: sticky; top: 0; z-index: 50;
+    box-shadow: 0 1px 32px rgba(90,60,200,0.12);
 }
 
 .header-inner {
@@ -132,6 +136,19 @@ input[type="color"] {
     border-radius: var(--radius);
     padding: 18px 20px;
     box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Decorative glow di pojok panel */
+.panel::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(124,58,237,0.06) 0%, transparent 70%);
+    pointer-events: none;
 }
 
 .panel-label {
@@ -247,28 +264,24 @@ button, .file-btn {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: var(--bg3);
-    border: 1px solid var(--border);
+    background: transparent;
+    border: none;
     border-radius: var(--radius-sm);
-    padding: 10px 14px;
-    border-left: 4px solid var(--purple);
+    padding: 8px 4px;
     will-change: transform;
-    /* iOS-like spring easing */
-    transition: background 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                box-shadow 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                transform  0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-    overflow: hidden;
+    transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+    overflow: visible;
+}
+
+/* Avatar mengembang saat is-active */
+.member-card.is-active .member-avatar {
+    transform: scale(1.18);
+    box-shadow: 0 0 22px 6px var(--pulse-color, rgba(167,139,250,0.6)) !important;
+    z-index: 2;
 }
 
 .member-card.is-active {
-    background: rgba(167,139,250,0.09);
-    box-shadow: 0 0 0 1px var(--pulse-color, var(--border2)),
-                0 0 32px -4px var(--pulse-color, rgba(167,139,250,0.5));
-    transform: scale(1.018);
-    z-index: 1;
-    transition: background 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                box-shadow 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                transform  0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 2;
 }
 
 /* Progress bar bawah kartu - tumbuh terus saat rekam */
@@ -778,25 +791,25 @@ button, .file-btn {
 }
 
 .strip-item .strip-avatar-wrap {
-    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: transform  0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .strip-item.holding .strip-avatar-wrap {
     transform: scale(0.88);
-    transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: transform  0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .strip-item .strip-avatar-wrap::before {
-    transition: opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                box-shadow 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: opacity   0.55s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .strip-item.holding .strip-avatar-wrap::before {
     opacity: 1;
     box-shadow: 0 0 22px 4px var(--strip-color, rgba(167,139,250,0.7));
     animation: hold-bob 0.9s ease-in-out infinite alternate;
-    transition: opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                box-shadow 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: opacity   0.55s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .strip-name {
@@ -863,36 +876,27 @@ button, .file-btn {
 }
 
 /* ══════════════════════════════════════════
-   MEMBER CARD — presentation style layout
+   MEMBER CARD — transparent, no box
    ══════════════════════════════════════════ */
-.member-card {
-    flex-direction: column;
-    padding: 0;
-    overflow: hidden;
-    border-left: none !important;
-    border-top: 1px solid var(--border);
-    background: var(--bg3);
-}
-
-.member-card:first-child { border-top: none; }
-
 .member-card-inner {
     display: flex;
     align-items: center;
     gap: 12px;
     width: 100%;
-    padding: 10px 14px;
+    padding: 4px 0;
 }
 
-/* Avatar dengan border glow warna member */
+/* Avatar */
 .member-card .member-avatar {
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
     border: 2px solid var(--purple);
-    transition: box-shadow 0.35s ease, border-color 0.35s ease;
+    transition: transform  0.55s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                border-color 0.4s ease;
 }
 
 /* Teks: nama + bar */
@@ -901,7 +905,7 @@ button, .file-btn {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
 }
 
 .member-name-row {
@@ -917,7 +921,7 @@ button, .file-btn {
     flex-shrink: 0;
 }
 
-/* Bar tipis di dalam member-text */
+/* Bar */
 .member-bar-wrap {
     width: 100%;
     height: 4px;
@@ -929,7 +933,7 @@ button, .file-btn {
 .member-bar {
     height: 100%;
     border-radius: 3px;
-    transition: width 0.35s cubic-bezier(.2,.8,.2,1);
+    transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     position: relative;
     max-width: 100%;
 }
@@ -948,6 +952,14 @@ button, .file-btn {
     filter: blur(3px);
     opacity: 0.85;
 }
+
+/* Bar melebar saat active */
+.member-card.is-active .member-bar {
+    transition: width 0.15s linear;
+}
+
+/* Separator antar member */
+.member-list { gap: 2px; }
 
 /* ══════════════════════════════════════════
    UNDO TOAST
@@ -1211,4 +1223,62 @@ button, .file-btn {
     padding: 10px 12px;
     animation: slideUp 0.2s ease;
     box-shadow: 0 0 0 3px rgba(167,139,250,0.1);
+}
+
+/* ══════════════════════════════════════════
+   PRESENTATION — two-column layout with media
+   ══════════════════════════════════════════ */
+.press-layout {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: center;
+    padding: 48px 48px;
+}
+
+.press-inner {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    /* override old position:relative z-index:2 */
+    position: relative;
+    z-index: auto;
+    padding: 0;
+    width: auto;
+    height: auto;
+}
+
+.press-media {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+}
+
+.press-yt-wrap {
+    width: 100%;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+}
+
+.press-yt-wrap iframe,
+#pressVideo {
+    border-radius: 14px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+}
+
+#pressAudio {
+    margin-top: 20px;
+}
+
+@media (max-width: 800px) {
+    .press-layout { grid-template-columns: 1fr; padding: 30px 24px; }
+    .press-media { display: none; }
 }
