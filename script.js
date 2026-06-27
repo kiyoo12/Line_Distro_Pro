@@ -251,7 +251,7 @@ function renderStripItem(n, c, p, index) {
             updateLeaderboardLive();
             updateTotalDuration();
             updatePresentationLive();
-            if (Date.now() - lastReorder > 400) {
+            if (Date.now() - lastReorder > 500) {
                 lastReorder = Date.now();
                 reorderLeaderboard();
             }
@@ -397,8 +397,10 @@ function reorderLeaderboard() {
         card.style.transition = 'none';
         card.style.transform = `translateY(${dy}px)`;
         requestAnimationFrame(() => {
-            card.style.transition = 'transform 0.45s cubic-bezier(.2,.8,.2,1)';
-            card.style.transform = '';
+            requestAnimationFrame(() => {
+                card.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                card.style.transform = '';
+            });
         });
     });
 }
@@ -1114,8 +1116,10 @@ function updatePresentationLive() {
         row.style.transition = 'none';
         row.style.transform = `translateY(${dy}px)`;
         requestAnimationFrame(() => {
-            row.style.transition = 'transform 0.4s cubic-bezier(.2,.8,.2,1)';
-            row.style.transform = '';
+            requestAnimationFrame(() => {
+                row.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                row.style.transform = '';
+            });
         });
     });
 }
