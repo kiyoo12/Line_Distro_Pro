@@ -252,20 +252,23 @@ button, .file-btn {
     border-radius: var(--radius-sm);
     padding: 10px 14px;
     border-left: 4px solid var(--purple);
-    transition: background 0.35s ease,
-                box-shadow 0.35s ease,
-                transform 0.35s cubic-bezier(.2,.8,.2,1);
+    will-change: transform;
+    /* iOS-like spring easing */
+    transition: background 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                box-shadow 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                transform  0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
     overflow: hidden;
 }
 
 .member-card.is-active {
     background: rgba(167,139,250,0.09);
-    box-shadow: 0 0 0 1px var(--pulse-color, var(--border2)), 0 0 28px -4px var(--pulse-color, rgba(167,139,250,0.5));
-    transform: scale(1.015);
+    box-shadow: 0 0 0 1px var(--pulse-color, var(--border2)),
+                0 0 32px -4px var(--pulse-color, rgba(167,139,250,0.5));
+    transform: scale(1.018);
     z-index: 1;
-    transition: background 0.35s ease,
-                box-shadow 0.35s ease,
-                transform 0.35s cubic-bezier(.2,.8,.2,1);
+    transition: background 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                box-shadow 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                transform  0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Progress bar bawah kartu - tumbuh terus saat rekam */
@@ -326,16 +329,22 @@ button, .file-btn {
     background: #ff4d4d;
     margin-right: 6px;
     opacity: 0;
+    transform: scale(0.5);
     box-shadow: none;
     animation: none !important;
-    transition: opacity 0.35s ease, box-shadow 0.35s ease;
+    transition: opacity  0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .member-card.is-active .rec-dot {
     opacity: 1;
-    box-shadow: 0 0 6px 2px rgba(255,77,77,0.6);
-    animation: rec-blink 1.2s ease-in-out infinite !important;
-    transition: opacity 0.35s ease, box-shadow 0.35s ease;
+    transform: scale(1);
+    box-shadow: 0 0 7px 2px rgba(255,77,77,0.6);
+    animation: rec-blink 1.4s ease-in-out infinite !important;
+    transition: opacity  0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 @keyframes rec-blink {
@@ -768,15 +777,26 @@ button, .file-btn {
     pointer-events: none;
 }
 
-.strip-item.holding .strip-avatar-wrap {
-    transform: scale(0.92);
-    transition: transform 0.35s cubic-bezier(.2,.8,.2,1);
+.strip-item .strip-avatar-wrap {
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+.strip-item.holding .strip-avatar-wrap {
+    transform: scale(0.88);
+    transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.strip-item .strip-avatar-wrap::before {
+    transition: opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                box-shadow 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
 .strip-item.holding .strip-avatar-wrap::before {
     opacity: 1;
-    box-shadow: 0 0 18px 2px var(--strip-color, rgba(167,139,250,0.7));
-    animation: hold-bob 0.7s ease-in-out infinite alternate;
-    transition: opacity 0.35s ease, box-shadow 0.35s ease;
+    box-shadow: 0 0 22px 4px var(--strip-color, rgba(167,139,250,0.7));
+    animation: hold-bob 0.9s ease-in-out infinite alternate;
+    transition: opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                box-shadow 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .strip-name {
