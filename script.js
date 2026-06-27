@@ -1082,25 +1082,35 @@ function updatePresentationLive() {
     const overlay = document.getElementById('presentationOverlay');
     if (!overlay || overlay.style.display === 'none') return;
     const names = Object.keys(memberDurations);
-    const total = Object.values(memberDurations).reduce((a, b) => a + b, 0) || 1;
     const maxDur = Math.max(...Object.values(memberDurations), 0.001);
+    const total  = Object.values(memberDurations).reduce((a, b) => a + b, 0) || 1;
     names.forEach(n => {
-        const row = document.querySelector(`.press-row[data-name="${n}"]`);
-        if (!row) return;
-        const bar = row.querySelector('.press-bar');
-        const timeEl = row.querySelector('.press-time');
-        const pctEl  = row.querySelector('.press-pct');
-        if (bar) bar.style.width = ((memberDurations[n] / maxDur) * 100).toFixed(1) + '%';
-        if (timeEl) timeEl.textContent = memberDurations[n].toFixed(1) + 's';
-        if (pctEl) pctEl.textContent = ((memberDurations[n] / total) * 100).toFixed(1) + '%';
+        const bar  = document.getElementById(`pbar-${CSS.escape(n)}`);
+        const time = document.getElementById(`ptime-${CSS.escape(n)}`);
+        if (bar)  bar.style.width = ((memberDurations[n] / maxDur) * 100).toFixed(1) + '%';
+        if (time) time.textContent = memberDurations[n].toFixed(1) + 's';
     });
-    // Reorder rows
+    // Reorder rows (FLIP)
     const container = document.getElementById('pressBars');
     const rows = [...container.children];
     const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
+    const firstRects = new Map(rows.map(r => [r.dataset.name, r.getBoundingClientRect()]));
     sorted.forEach(n => {
         const row = rows.find(r => r.dataset.name === n);
         if (row) container.appendChild(row);
+    });
+    rows.forEach(row => {
+        const n = row.dataset.name;
+        const first = firstRects.get(n);
+        const last  = row.getBoundingClientRect();
+        const dy = first.top - last.top;
+        if (Math.abs(dy) < 1) return;
+        row.style.transition = 'none';
+        row.style.transform = `translateY(${dy}px)`;
+        requestAnimationFrame(() => {
+            row.style.transition = 'transform 0.4s cubic-bezier(.2,.8,.2,1)';
+            row.style.transform = '';
+        });
     });
 }
 
