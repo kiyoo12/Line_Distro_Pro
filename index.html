@@ -178,11 +178,10 @@
 
 <!-- Presentation Mode -->
 <div id="presentationOverlay" class="press-overlay" style="display:none;">
+    <div class="press-bg"></div>
+    <button class="press-close" onclick="closePresentation()">✕ Exit</button>
     <div class="press-inner">
-        <div class="press-header">
-            <span id="pressSongTitle" class="press-title">Line Distribution</span>
-            <button class="press-close" onclick="closePresentation()">✕ Exit</button>
-        </div>
+        <div id="pressSongTitle" class="press-title">Line Distribution</div>
         <div id="pressBars" class="press-bars"></div>
     </div>
 </div>
