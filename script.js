@@ -295,21 +295,27 @@ function renderMemberCard(n, c, p, d) {
     card.dataset.name = n;
     card.innerHTML = `
         <div class="member-card-inner">
-            <div class="member-info">
-                <span class="rank-num">1</span>
-                <img src="${p}" class="member-avatar" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
-                <div>
-                    <div class="member-name">${n}</div>
-                    <span><span class="rec-dot"></span><span class="member-time" id="time-${CSS.escape(n)}">${d.toFixed(1)}s</span></span>
+            <span class="rank-num">1</span>
+            <img src="${p}" class="member-avatar"
+                 style="border-color:${c}; box-shadow:0 0 10px 2px ${c}44;"
+                 onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
+            <div class="member-text">
+                <div class="member-name-row">
+                    <span class="member-name">${n}</span>
+                    <div class="member-time-wrap">
+                        <span class="rec-dot"></span>
+                        <span class="member-time" id="time-${CSS.escape(n)}">${d.toFixed(1)}s</span>
+                    </div>
+                </div>
+                <div class="member-bar-wrap">
+                    <div class="member-bar" id="bar-${CSS.escape(n)}"
+                         style="background:linear-gradient(90deg,${c}88,${c}); width:0%;"></div>
                 </div>
             </div>
             <div class="member-actions">
-                <button class="btn-sm" onclick="resetMember('${n}')" title="Reset durasi">↺</button>
-                <button class="btn-sm del" onclick="confirmDeleteMember('${n}')" title="Delete member">✕</button>
+                <button class="btn-sm" onclick="resetMember('${n}')" title="Reset">↺</button>
+                <button class="btn-sm del" onclick="confirmDeleteMember('${n}')" title="Delete">✕</button>
             </div>
-        </div>
-        <div class="member-bar-wrap">
-            <div class="member-bar" id="bar-${CSS.escape(n)}" style="background:${c}; width:0%;"></div>
         </div>`;
     return card;
 }
