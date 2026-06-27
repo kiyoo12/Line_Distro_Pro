@@ -938,125 +938,167 @@ button, .file-btn {
 /* ══════════════════════════════════════════
    PRESENTATION MODE
    ══════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   PRESENTATION MODE — overlay style
+   ══════════════════════════════════════════ */
 .press-overlay {
     position: fixed;
     inset: 0;
-    background: #080810;
+    background: #000;
     z-index: 500;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px;
-}
-
-.press-inner {
-    width: 100%;
-    max-width: 900px;
-    display: flex;
     flex-direction: column;
-    gap: 28px;
+    overflow: hidden;
 }
 
-.press-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+/* Background video/image placeholder */
+.press-bg {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(160deg, #0d0820 0%, #0a1628 50%, #080d1a 100%);
+    z-index: 0;
 }
 
-.press-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 28px;
-    font-weight: 700;
-    background: linear-gradient(90deg, var(--purple), var(--cyan));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+.press-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.3) 100%);
 }
 
+/* Close button — pojok kanan atas */
 .press-close {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid var(--border);
-    color: var(--text2);
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 13px;
+    position: absolute;
+    top: 18px;
+    right: 20px;
+    z-index: 10;
+    background: rgba(0,0,0,0.45);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.7);
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
     font-family: 'Inter', sans-serif;
     transition: all 0.18s;
+    backdrop-filter: blur(6px);
 }
-.press-close:hover { border-color: var(--danger); color: var(--danger); }
+.press-close:hover { background: rgba(255,77,77,0.3); border-color: var(--danger); color: #fff; }
+
+/* Inner content */
+.press-inner {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 50px 48px;
+    gap: 0;
+}
+
+/* Song title */
+.press-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 28px;
+}
 
 .press-bars {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 18px;
+    max-width: 560px;
 }
 
 .press-row {
-    display: grid;
-    grid-template-columns: 220px 1fr 120px;
+    display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
+    animation: pressRowIn 0.35s ease both;
+}
+
+@keyframes pressRowIn {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+.press-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2.5px solid var(--press-color, rgba(255,255,255,0.5));
+    box-shadow: 0 0 14px 2px var(--press-color, rgba(255,255,255,0.3));
+    transition: box-shadow 0.35s ease, border-color 0.35s ease;
 }
 
 .press-member-info {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 110px;
 }
-
-.press-avatar {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid var(--border2);
-}
-
-.press-badge { font-size: 18px; }
 
 .press-name {
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 700;
-    color: var(--text);
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.6);
 }
 
 .press-bar-wrap {
-    height: 20px;
-    background: rgba(255,255,255,0.05);
-    border-radius: 10px;
+    flex: 1;
+    height: 5px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
     overflow: hidden;
 }
 
 .press-bar {
     height: 100%;
-    border-radius: 10px;
-    transition: width 0.3s cubic-bezier(.2,.8,.2,1);
-    box-shadow: 0 0 12px 1px currentColor;
+    border-radius: 3px;
+    transition: width 0.4s cubic-bezier(.2,.8,.2,1);
+    position: relative;
     min-width: 2px;
 }
 
-.press-meta {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    justify-content: flex-end;
+/* Glow effect di ujung bar */
+.press-bar::after {
+    content: '';
+    position: absolute;
+    right: -4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: inherit;
+    filter: blur(4px);
+    opacity: 0.9;
 }
 
 .press-time {
     font-family: 'Space Grotesk', monospace;
-    font-size: 16px;
-    color: var(--cyan);
-    min-width: 52px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    min-width: 48px;
     text-align: right;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.5);
 }
 
-.press-pct {
-    font-size: 13px;
-    color: var(--text3);
-    min-width: 40px;
-    text-align: right;
-}
+.press-meta { display: none; }
+.press-badge { display: none; }
 
 /* ══════════════════════════════════════════
    RANK BADGE — angka dengan warna ranking
