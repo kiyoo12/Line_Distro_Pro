@@ -180,9 +180,20 @@
 <div id="presentationOverlay" class="press-overlay" style="display:none;">
     <div class="press-bg"></div>
     <button class="press-close" onclick="closePresentation()">✕ Exit</button>
-    <div class="press-inner">
-        <div id="pressSongTitle" class="press-title">Line Distribution</div>
-        <div id="pressBars" class="press-bars"></div>
+    <div class="press-layout">
+        <!-- Kiri: member bars -->
+        <div class="press-inner">
+            <div id="pressSongTitle" class="press-title">Line Distribution</div>
+            <div id="pressBars" class="press-bars"></div>
+        </div>
+        <!-- Kanan: media player -->
+        <div class="press-media">
+            <div id="pressYtWrap" class="press-yt-wrap" style="display:none;">
+                <div id="pressYtPlayer"></div>
+            </div>
+            <video id="pressVideo" controls style="display:none; width:100%; border-radius:12px;"></video>
+            <audio id="pressAudio" controls style="display:none; width:100%;"></audio>
+        </div>
     </div>
 </div>
 
