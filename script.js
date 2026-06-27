@@ -1041,6 +1041,28 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 function openPresentation() {
     const names = Object.keys(memberDurations);
     if (names.length === 0) { showToast('⚠️ No members to present'); return; }
+
+    // Sinkron media ke presentation player
+    const vidSrc = document.getElementById('localMedia').src;
+    const audSrc = document.getElementById('audioPlayer').src;
+    const pressVid = document.getElementById('pressVideo');
+    const pressAud = document.getElementById('pressAudio');
+    const pressYt  = document.getElementById('pressYtWrap');
+
+    pressVid.style.display = 'none';
+    pressAud.style.display = 'none';
+    pressYt.style.display  = 'none';
+
+    if (vidSrc && document.getElementById('localMedia').style.display !== 'none') {
+        pressVid.src = vidSrc;
+        pressVid.style.display = 'block';
+    } else if (audSrc && document.getElementById('audioPlayer').style.display !== 'none') {
+        pressAud.src = audSrc;
+        pressAud.style.display = 'block';
+    } else if (window.ytPlayer) {
+        pressYt.style.display = 'block';
+    }
+
     const overlay = document.getElementById('presentationOverlay');
     overlay.style.display = 'flex';
     renderPresentationBars();
@@ -1048,7 +1070,10 @@ function openPresentation() {
 
 function closePresentation() {
     document.getElementById('presentationOverlay').style.display = 'none';
+    if (_pressReorderTimer) { clearTimeout(_pressReorderTimer); _pressReorderTimer = null; }
 }
+
+
 
 function renderPresentationBars() {
     const container = document.getElementById('pressBars');
@@ -1086,42 +1111,52 @@ function renderPresentationBars() {
 }
 
 // Update presentation bars real-time saat rekam
+let _pressReorderTimer = null;
+
 function updatePresentationLive() {
     const overlay = document.getElementById('presentationOverlay');
     if (!overlay || overlay.style.display === 'none') return;
     const names = Object.keys(memberDurations);
     const maxDur = Math.max(...Object.values(memberDurations), 0.001);
-    const total  = Object.values(memberDurations).reduce((a, b) => a + b, 0) || 1;
+
+    // Update bar & time — setiap tick
     names.forEach(n => {
         const bar  = document.getElementById(`pbar-${CSS.escape(n)}`);
         const time = document.getElementById(`ptime-${CSS.escape(n)}`);
         if (bar)  bar.style.width = ((memberDurations[n] / maxDur) * 100).toFixed(1) + '%';
         if (time) time.textContent = memberDurations[n].toFixed(1) + 's';
     });
-    // Reorder rows (FLIP)
-    const container = document.getElementById('pressBars');
-    const rows = [...container.children];
-    const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
-    const firstRects = new Map(rows.map(r => [r.dataset.name, r.getBoundingClientRect()]));
-    sorted.forEach(n => {
-        const row = rows.find(r => r.dataset.name === n);
-        if (row) container.appendChild(row);
-    });
-    rows.forEach(row => {
-        const n = row.dataset.name;
-        const first = firstRects.get(n);
-        const last  = row.getBoundingClientRect();
-        const dy = first.top - last.top;
-        if (Math.abs(dy) < 1) return;
-        row.style.transition = 'none';
-        row.style.transform = `translateY(${dy}px)`;
-        requestAnimationFrame(() => {
+
+    // Reorder — throttle ke 800ms agar FLIP tidak berkonflik
+    if (_pressReorderTimer) return;
+    _pressReorderTimer = setTimeout(() => {
+        _pressReorderTimer = null;
+        const container = document.getElementById('pressBars');
+        if (!container) return;
+        const rows = [...container.children];
+        const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
+        const firstRects = new Map(rows.map(r => [r.dataset.name, r.getBoundingClientRect()]));
+        sorted.forEach(n => {
+            const row = rows.find(r => r.dataset.name === n);
+            if (row) container.appendChild(row);
+        });
+        rows.forEach(row => {
+            const n = row.dataset.name;
+            const first = firstRects.get(n);
+            if (!first) return;
+            const last = row.getBoundingClientRect();
+            const dy = first.top - last.top;
+            if (Math.abs(dy) < 1) return;
+            row.style.transition = 'none';
+            row.style.transform = `translateY(${dy}px)`;
             requestAnimationFrame(() => {
-                row.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                row.style.transform = '';
+                requestAnimationFrame(() => {
+                    row.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                    row.style.transform = '';
+                });
             });
         });
-    });
+    }, 800);
 }
 
 window.onload = () => {
