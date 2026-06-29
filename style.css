@@ -1378,3 +1378,15 @@ button, .file-btn {
     background: linear-gradient(90deg, #16a34a88, #22c55e) !important;
     box-shadow: 0 0 10px 2px rgba(34,197,94,0.6) !important;
 }
+
+/* ══ Presentation avatar — smooth transition saat hold ══ */
+.press-avatar {
+    transition:
+        transform  0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+        border-color 0.5s ease;
+}
+
+.press-bar {
+    transition: width 0.15s linear !important;
+}
