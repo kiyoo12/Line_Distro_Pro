@@ -408,12 +408,18 @@ function reorderLeaderboard() {
         if (!first) return;
         const dy = first.top - last.top;
         if (Math.abs(dy) < 1) return;
-        card.style.transition = 'none';
+        // Hanya override transition transform — bukan semua properti
+        card.style.transition = 'transform 0s';
         card.style.transform = `translateY(${dy}px)`;
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 card.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
                 card.style.transform = '';
+                // Bersihkan setelah animasi selesai supaya CSS class bisa kembali kontrol
+                setTimeout(() => {
+                    card.style.transition = '';
+                    card.style.transform  = '';
+                }, 600);
             });
         });
     });
@@ -1275,11 +1281,15 @@ function updatePresentationLive() {
                     const last = row.getBoundingClientRect();
                     const dy   = first.top - last.top;
                     if (Math.abs(dy) < 1) return;
-                    row.style.transition = 'none';
+                    row.style.transition = 'transform 0s';
                     row.style.transform  = `translateY(${dy}px)`;
                     requestAnimationFrame(() => {
                         row.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
                         row.style.transform  = '';
+                        setTimeout(() => {
+                            row.style.transition = '';
+                            row.style.transform  = '';
+                        }, 600);
                     });
                 });
                 setTimeout(() => { _pressIsReordering = false; }, 600);
