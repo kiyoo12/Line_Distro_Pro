@@ -1178,26 +1178,27 @@ function renderPresentationBars() {
     document.getElementById('pressSongTitle').textContent = title;
 
     sorted.forEach((n, i) => {
-        const pct = ((memberDurations[n] / total) * 100).toFixed(1);
         const barPct = ((memberDurations[n] / maxDur) * 100).toFixed(1);
-        const badge = `${i+1}`;
+        const c = memberColors[n] || '#a78bfa';
         const row = document.createElement('div');
         row.className = 'press-row';
         row.dataset.name = n;
+        row.style.animationDelay = (i * 0.06) + 's';
+        row.style.setProperty('--press-color', c);
         row.innerHTML = `
+            <img src="${memberPhotos[n]}" class="press-avatar"
+                 id="pavatar-${CSS.escape(n)}"
+                 style="border-color:${c}; box-shadow:0 0 14px 2px ${c}55;"
+                 onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
             <div class="press-member-info">
-                <img src="${memberPhotos[n]}" class="press-avatar"
-                     onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
-                <span class="press-badge">${badge}</span>
                 <span class="press-name">${n}</span>
+                <div class="press-bar-wrap">
+                    <div class="press-bar"
+                         id="pbar-${CSS.escape(n)}"
+                         style="width:${barPct}%; background:linear-gradient(90deg,${c}99,${c});"></div>
+                </div>
             </div>
-            <div class="press-bar-wrap">
-                <div class="press-bar" style="width:${barPct}%; background:${memberColors[n]};"></div>
-            </div>
-            <div class="press-meta">
-                <span class="press-time">${memberDurations[n].toFixed(1)}s</span>
-                <span class="press-pct">${pct}%</span>
-            </div>`;
+            <span class="press-time" id="ptime-${CSS.escape(n)}">${memberDurations[n].toFixed(1)}s</span>`;
         container.appendChild(row);
     });
 }
@@ -1213,12 +1214,25 @@ function updatePresentationLive() {
     if (names.length === 0) return;
     const maxDur = Math.max(...Object.values(memberDurations), 0.001);
 
-    // Update bar & time langsung — tidak sentuh DOM struktur
+    // Update bar, time, dan avatar glow langsung
     names.forEach(n => {
-        const bar  = document.getElementById(`pbar-${CSS.escape(n)}`);
-        const time = document.getElementById(`ptime-${CSS.escape(n)}`);
-        if (bar)  bar.style.width = ((memberDurations[n] / maxDur) * 100).toFixed(1) + '%';
+        const bar    = document.getElementById(`pbar-${CSS.escape(n)}`);
+        const time   = document.getElementById(`ptime-${CSS.escape(n)}`);
+        const avatar = document.getElementById(`pavatar-${CSS.escape(n)}`);
+        const c      = memberColors[n] || '#a78bfa';
+
+        if (bar) bar.style.width = ((memberDurations[n] / maxDur) * 100).toFixed(1) + '%';
         if (time) time.textContent = memberDurations[n].toFixed(1) + 's';
+
+        // Avatar glow lebih terang saat sedang direkam
+        if (avatar) {
+            const isRecording = !!memberIntervals[n];
+            avatar.style.borderColor = c;
+            avatar.style.boxShadow = isRecording
+                ? `0 0 28px 8px ${c}99`
+                : `0 0 14px 2px ${c}44`;
+            avatar.style.transform = isRecording ? 'scale(1.15)' : 'scale(1)';
+        }
     });
 
     // Reorder — throttle 1000ms, skip kalau sedang animasi
