@@ -1215,74 +1215,77 @@ let _pressIsReordering = false;
 function updatePresentationLive() {
     const overlay = document.getElementById('presentationOverlay');
     if (!overlay || overlay.style.display === 'none') return;
-    const names = Object.keys(memberDurations);
-    if (names.length === 0) return;
+
+    const container = document.getElementById('pressBars');
+    if (!container || container.children.length === 0) return;
+
+    const rows = [...container.children];
     const maxDur = Math.max(...Object.values(memberDurations), 0.001);
 
-    // Update bar, time, dan avatar glow langsung
-    names.forEach(n => {
-        const bar    = document.getElementById(pressId('pbar-', n));
-        const time   = document.getElementById(pressId('ptime-', n));
-        const avatar = document.getElementById(pressId('pavatar-', n));
-        const c      = memberColors[n] || '#a78bfa';
+    // ── 1. Update bar dan waktu (SAMA persis dengan mode normal) ──
+    rows.forEach(row => {
+        const n   = row.dataset.name;
+        const bar = row.querySelector('.press-bar');
+        const time= row.querySelector('.press-time');
+        const avatar = row.querySelector('.press-avatar');
+        const c   = memberColors[n] || '#a78bfa';
 
-        if (bar) bar.style.width = ((memberDurations[n] / maxDur) * 100).toFixed(1) + '%';
-        if (time) time.textContent = memberDurations[n].toFixed(1) + 's';
-
-        // Avatar glow lebih terang saat sedang direkam
+        if (bar)  bar.style.width = ((memberDurations[n] || 0) / maxDur * 100).toFixed(1) + '%';
+        if (time) time.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
         if (avatar) {
-            const isRecording = !!memberIntervals[n];
-            avatar.style.borderColor = c;
-            avatar.style.boxShadow = isRecording
-                ? `0 0 28px 8px ${c}99`
-                : `0 0 14px 2px ${c}44`;
-            avatar.style.transform = isRecording ? 'scale(1.15)' : 'scale(1)';
+            const rec = !!memberIntervals[n];
+            avatar.style.transform  = rec ? 'scale(1.15)' : 'scale(1)';
+            avatar.style.boxShadow  = rec ? `0 0 28px 8px ${c}99` : `0 0 14px 2px ${c}44`;
         }
     });
 
-    // Reorder — throttle 1000ms, skip kalau sedang animasi
+    // ── 2. Reorder naik/turun (SAMA persis dengan reorderLeaderboard) ──
     if (_pressReorderTimer || _pressIsReordering) return;
     _pressReorderTimer = setTimeout(() => {
         _pressReorderTimer = null;
-        const container = document.getElementById('pressBars');
-        if (!container || container.children.length === 0) return;
+        if (_pressIsReordering) return;
+
+        const curRows = [...container.children];
+        const sortedNames = Object.keys(memberDurations)
+            .sort((a, b) => memberDurations[b] - memberDurations[a]);
+
+        // Skip kalau urutan sudah benar
+        const same = sortedNames.every((n, i) => curRows[i] && curRows[i].dataset.name === n);
+        if (same) return;
 
         _pressIsReordering = true;
-        const rows = [...container.children];
-        const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
 
-        // Cek apakah urutan perlu berubah
-        const currentOrder = rows.map(r => r.dataset.name);
-        const needsReorder = sorted.some((n, i) => n !== currentOrder[i]);
-        if (!needsReorder) { _pressIsReordering = false; return; }
+        // FIRST — catat posisi lama
+        const firstRects = new Map();
+        curRows.forEach(r => firstRects.set(r.dataset.name, r.getBoundingClientRect()));
 
-        // FLIP
-        const firstRects = new Map(rows.map(r => [r.dataset.name, r.getBoundingClientRect()]));
-        sorted.forEach(n => {
-            const row = rows.find(r => r.dataset.name === n);
+        // LAST — reorder DOM
+        sortedNames.forEach(n => {
+            const row = curRows.find(r => r.dataset.name === n);
             if (row) container.appendChild(row);
         });
 
+        // INVERT + PLAY — double rAF sama seperti reorderLeaderboard
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                rows.forEach(row => {
-                    const n = row.dataset.name;
+                sortedNames.forEach(n => {
+                    const row   = curRows.find(r => r.dataset.name === n);
                     const first = firstRects.get(n);
-                    if (!first) return;
+                    if (!row || !first) return;
                     const last = row.getBoundingClientRect();
-                    const dy = first.top - last.top;
+                    const dy   = first.top - last.top;
                     if (Math.abs(dy) < 1) return;
                     row.style.transition = 'none';
-                    row.style.transform = `translateY(${dy}px)`;
+                    row.style.transform  = `translateY(${dy}px)`;
                     requestAnimationFrame(() => {
-                        row.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                        row.style.transform = '';
+                        row.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        row.style.transform  = '';
                     });
                 });
-                setTimeout(() => { _pressIsReordering = false; }, 650);
+                setTimeout(() => { _pressIsReordering = false; }, 600);
             });
         });
-    }, 1000);
+    }, 600);
 }
 
 window.onload = () => {
