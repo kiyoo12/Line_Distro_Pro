@@ -1030,37 +1030,28 @@ button, .file-btn {
 .modal-topbar h3 { text-align: left !important; }
 
 /* ══════════════════════════════════════════
-   PRESENTATION MODE
-   ══════════════════════════════════════════ */
-/* ══════════════════════════════════════════
-   PRESENTATION MODE — overlay style
+   PRESENTATION MODE — overlay + two column
    ══════════════════════════════════════════ */
 .press-overlay {
     position: fixed;
     inset: 0;
-    background: #000;
+    background: #060610;
     z-index: 500;
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
-/* Background video/image placeholder */
 .press-bg {
     position: absolute;
     inset: 0;
-    background: linear-gradient(160deg, #0d0820 0%, #0a1628 50%, #080d1a 100%);
+    background:
+        radial-gradient(ellipse 70% 60% at 10% 20%, rgba(124,58,237,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 90% 80%, rgba(29,78,216,0.15) 0%, transparent 60%),
+        linear-gradient(160deg, #0d0820 0%, #0a1628 100%);
     z-index: 0;
 }
 
-.press-bg::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to right, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.3) 100%);
-}
-
-/* Close button — pojok kanan atas */
 .press-close {
     position: absolute;
     top: 18px;
@@ -1075,168 +1066,16 @@ button, .file-btn {
     font-weight: 600;
     cursor: pointer;
     font-family: 'Inter', sans-serif;
-    transition: all 0.18s;
+    transition: all 0.25s ease;
     backdrop-filter: blur(6px);
 }
-.press-close:hover { background: rgba(255,77,77,0.3); border-color: var(--danger); color: #fff; }
-
-/* Inner content */
-.press-inner {
-    position: relative;
-    z-index: 2;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: 50px 48px;
-    gap: 0;
-}
-
-/* Song title */
-.press-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: rgba(255,255,255,0.55);
-    margin-bottom: 28px;
-}
-
-.press-bars {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-    max-width: 560px;
-}
-
-.press-row {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    animation: pressRowIn 0.35s ease both;
-}
-
-@keyframes pressRowIn {
-    from { opacity: 0; transform: translateX(-12px); }
-    to   { opacity: 1; transform: translateX(0); }
-}
-
-.press-avatar {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
-    border: 2.5px solid var(--press-color, rgba(255,255,255,0.5));
-    box-shadow: 0 0 14px 2px var(--press-color, rgba(255,255,255,0.3));
-    transition: box-shadow 0.35s ease, border-color 0.35s ease;
-}
-
-.press-member-info {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    min-width: 110px;
-}
-
-.press-name {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 14px;
-    font-weight: 700;
+.press-close:hover {
+    background: rgba(255,77,77,0.3);
+    border-color: var(--danger);
     color: #fff;
-    letter-spacing: 0.5px;
-    text-shadow: 0 1px 8px rgba(0,0,0,0.6);
 }
 
-.press-bar-wrap {
-    flex: 1;
-    height: 5px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 3px;
-    overflow: hidden;
-}
-
-.press-bar {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.4s cubic-bezier(.2,.8,.2,1);
-    position: relative;
-    min-width: 2px;
-}
-
-/* Glow effect di ujung bar */
-.press-bar::after {
-    content: '';
-    position: absolute;
-    right: -4px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: inherit;
-    filter: blur(4px);
-    opacity: 0.9;
-}
-
-.press-time {
-    font-family: 'Space Grotesk', monospace;
-    font-size: 15px;
-    font-weight: 700;
-    color: #fff;
-    min-width: 48px;
-    text-align: right;
-    text-shadow: 0 1px 6px rgba(0,0,0,0.5);
-}
-
-.press-meta { display: none; }
-.press-badge { display: none; }
-
-/* ══════════════════════════════════════════
-   RANK BADGE — angka dengan warna ranking
-   ══════════════════════════════════════════ */
-.rank-badge {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    min-width: 22px;
-    text-align: center;
-    color: var(--text3);
-}
-
-/* Warna khusus top 3 */
-.rank-item:nth-child(1) .rank-badge { color: #fbbf24; }
-.rank-item:nth-child(2) .rank-badge { color: #cbd5e1; }
-.rank-item:nth-child(3) .rank-badge { color: #d97706; }
-
-.press-badge {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    min-width: 26px;
-    text-align: center;
-    color: var(--text3);
-}
-
-.press-row:nth-child(1) .press-badge { color: #fbbf24; }
-.press-row:nth-child(2) .press-badge { color: #cbd5e1; }
-.press-row:nth-child(3) .press-badge { color: #d97706; }
-
-/* Preset Save Bar */
-.preset-save-bar {
-    background: var(--bg3);
-    border: 1px solid var(--purple);
-    border-radius: var(--radius-sm);
-    padding: 10px 12px;
-    animation: slideUp 0.2s ease;
-    box-shadow: 0 0 0 3px rgba(167,139,250,0.1);
-}
-
-/* ══════════════════════════════════════════
-   PRESENTATION — two-column layout with media
-   ══════════════════════════════════════════ */
+/* Two-column layout */
 .press-layout {
     position: relative;
     z-index: 2;
@@ -1246,22 +1085,17 @@ button, .file-btn {
     grid-template-columns: 1fr 1fr;
     gap: 40px;
     align-items: center;
-    padding: 48px 48px;
+    padding: 60px 56px;
 }
 
+/* Left: member bars */
 .press-inner {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 0;
-    /* override old position:relative z-index:2 */
-    position: relative;
-    z-index: auto;
-    padding: 0;
-    width: auto;
-    height: auto;
+    gap: 6px;
 }
 
+/* Right: media */
 .press-media {
     display: flex;
     flex-direction: column;
@@ -1270,123 +1104,127 @@ button, .file-btn {
     gap: 16px;
 }
 
-.press-yt-wrap {
-    width: 100%;
-    border-radius: 14px;
+.press-yt-wrap { width: 100%; border-radius: 14px; overflow: hidden; }
+#pressVideo { border-radius: 14px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.6); }
+
+/* Song title */
+.press-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 20px;
+}
+
+/* Member rows container */
+.press-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Each member row */
+.press-row {
+    display: grid;
+    grid-template-columns: 52px 1fr 60px;
+    align-items: center;
+    gap: 14px;
+    will-change: transform;
+    animation: pressRowIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+    /* Transition untuk FLIP naik/turun */
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pressRowIn {
+    from { opacity: 0; transform: translateX(-16px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Avatar */
+.press-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2.5px solid rgba(255,255,255,0.3);
+    transition:
+        transform  0.6s cubic-bezier(0.34,1.56,0.64,1),
+        box-shadow 0.6s cubic-bezier(0.25,0.46,0.45,0.94),
+        border-color 0.5s ease;
+}
+
+/* Member info: nama + bar */
+.press-member-info {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 0;
+}
+
+.press-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.5);
+    white-space: nowrap;
     overflow: hidden;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    text-overflow: ellipsis;
 }
 
-.press-yt-wrap iframe,
-#pressVideo {
-    border-radius: 14px;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+/* Bar wrapper */
+.press-bar-wrap {
+    width: 100%;
+    height: 5px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
 }
 
-#pressAudio {
-    margin-top: 20px;
+/* Bar fill */
+.press-bar {
+    height: 100%;
+    border-radius: 3px;
+    width: 0%;
+    min-width: 0;
+    transition: width 0.12s linear;
+    position: relative;
 }
+
+/* Glow dot di ujung bar */
+.press-bar::after {
+    content: '';
+    position: absolute;
+    right: -4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: inherit;
+    filter: blur(3px);
+    opacity: 0.9;
+}
+
+/* Duration text */
+.press-time {
+    font-family: 'Space Grotesk', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.85);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Hide old meta/badge */
+.press-meta { display: none; }
+.press-badge { display: none; }
 
 @media (max-width: 800px) {
-    .press-layout { grid-template-columns: 1fr; padding: 30px 24px; }
+    .press-layout { grid-template-columns: 1fr; padding: 40px 24px; }
     .press-media { display: none; }
-}
-
-/* ══════════════════════════════════════════
-   AD-LIB STYLES
-   ══════════════════════════════════════════ */
-
-/* Badge huruf Ad-Lib di pojok kiri bawah foto strip */
-.strip-ad-key {
-    position: absolute;
-    bottom: -2px;
-    left: -2px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: rgba(34, 197, 94, 0.85);
-    color: #fff;
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 9px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid var(--surface);
-    pointer-events: none;
-}
-
-/* Strip item saat Ad-Lib aktif */
-.strip-item .strip-name,
-.strip-item .strip-time {
-    transition: color 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.strip-item.adlib-active .strip-name { color: #4ade80; }
-.strip-item.adlib-active .strip-time { color: #4ade80; }
-
-/* Avatar wrap base — transition untuk adlib glow */
-.strip-avatar-wrap::before {
-    transition:
-        opacity      0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow   0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-        border-color 0.5s ease;
-}
-
-.strip-avatar-wrap.adlib-glow::before {
-    border-color: #22c55e !important;
-    opacity: 1 !important;
-    box-shadow: 0 0 22px 5px rgba(34, 197, 94, 0.7) !important;
-    animation: adlib-pulse 0.8s ease-in-out infinite alternate !important;
-    transition:
-        opacity      0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow   0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-        border-color 0.5s ease;
-}
-
-@keyframes adlib-pulse {
-    from { box-shadow: 0 0 12px 2px rgba(34,197,94,0.5); }
-    to   { box-shadow: 0 0 28px 8px rgba(34,197,94,0.8); }
-}
-
-/* Kartu leaderboard saat Ad-Lib */
-/* Transition simetris di base, bukan hanya di .adlib-card */
-.member-card .member-name {
-    transition: color 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.member-card .member-bar {
-    transition:
-        width      0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-        background 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.member-card.adlib-card .member-avatar {
-    border-color: #22c55e !important;
-    box-shadow: 0 0 18px 5px rgba(34,197,94,0.55) !important;
-    transform: scale(1.12);
-    transition:
-        transform    0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow   0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-        border-color 0.5s ease;
-}
-
-.member-card.adlib-card .member-name { color: #4ade80; }
-
-.member-card.adlib-card .member-bar {
-    background: linear-gradient(90deg, #16a34a88, #22c55e) !important;
-    box-shadow: 0 0 10px 2px rgba(34,197,94,0.6) !important;
-}
-
-/* ══ Presentation avatar — smooth transition saat hold ══ */
-.press-avatar {
-    transition:
-        transform  0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-        border-color 0.5s ease;
-}
-
-.press-bar {
-    transition: width 0.15s linear !important;
 }
