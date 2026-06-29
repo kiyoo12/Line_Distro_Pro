@@ -208,13 +208,21 @@ function renderStripItem(n, c, p, index) {
     item.className = 'strip-item';
     item.dataset.name = n;
     item.style.setProperty('--strip-color', c);
-    const keyBadge = index < 9 ? `<span class="strip-key">${index + 1}</span>` : '';
-    const tooltip = index < 9 ? `Hold [${index+1}] to record` : `Hold to record`;
+    const keyLabel = index < 9 ? index + 1 : index === 9 ? '0' : '';
+    const adLabel  = index < 10 ? 'QWERTYUIOP'[index] : '';
+    const keyBadge = keyLabel !== '' ? `<span class="strip-key">${keyLabel}</span>` : '';
+    const adBadge  = adLabel  !== '' ? `<span class="strip-ad-key">${adLabel}</span>` : '';
+    const holdKey = index < 9 ? index + 1 : index === 9 ? '0' : '—';
+    const adKey   = index < 10 ? 'QWERTYUIOP'[index] : '—';
+    const tooltip = index < 10
+        ? `Hold [${holdKey}] · Ad-Lib [${adKey}]`
+        : `Hold to record`;
     item.title = tooltip;
     item.innerHTML = `
-        <div class="strip-avatar-wrap">
+        <div class="strip-avatar-wrap" id="sav-${CSS.escape(n)}">
             <img src="${p}" class="strip-avatar" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
             ${keyBadge}
+            ${adBadge}
         </div>
         <div class="strip-name">${n}</div>
         <div class="strip-time" id="strip-time-${CSS.escape(n)}">${(memberDurations[n]||0).toFixed(1)}s</div>
@@ -251,9 +259,9 @@ function renderStripItem(n, c, p, index) {
             updateLeaderboardLive();
             updateTotalDuration();
             updatePresentationLive();
-            if (Date.now() - lastReorder > 500) {
+            if (Date.now() - lastReorder > 600) {
                 lastReorder = Date.now();
-                reorderLeaderboard();
+                requestAnimationFrame(() => reorderLeaderboard());
             }
         }, 50);
     }
@@ -352,19 +360,25 @@ function applyRankStyles() {
 }
 
 // Update angka waktu di leaderboard tanpa re-render/re-sort (dipanggil tiap tick saat hold)
+let _lastMaxDur = 0.001;
+let _maxDurTick = 0;
+
 function updateLeaderboardLive() {
     const all = [...memberList.children];
-    const maxDur = Math.max(...all.map(c => memberDurations[c.dataset.name] || 0), 0.001);
+    // Recalculate maxDur setiap 10 tick (~500ms) untuk hemat CPU
+    if (Date.now() - _maxDurTick > 500) {
+        _lastMaxDur = Math.max(...all.map(c => memberDurations[c.dataset.name] || 0), 0.001);
+        _maxDurTick = Date.now();
+    }
     all.forEach(card => {
         const n = card.dataset.name;
         const el = card.querySelector('.member-time');
         if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
-        card.classList.toggle('is-active', !!memberIntervals[n]);
+        const isActive = !!memberIntervals[n];
+        if (card.classList.contains('is-active') !== isActive)
+            card.classList.toggle('is-active', isActive);
         const bar = card.querySelector('.member-bar');
-        if (bar) {
-            const pct = ((memberDurations[n] || 0) / maxDur * 100).toFixed(1);
-            bar.style.width = pct + '%';
-        }
+        if (bar) bar.style.width = ((memberDurations[n] || 0) / _lastMaxDur * 100).toFixed(1) + '%';
     });
 }
 
@@ -728,6 +742,7 @@ function loadVideo() {
     document.getElementById('mediaLabel').textContent = '';
     const yt = document.getElementById('player');
     yt.style.display = 'block';
+    window._currentYtVideoId = v;
     if (window.ytPlayer) { window.ytPlayer.loadVideoById(v); }
     else { window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v }); }
 }
@@ -994,38 +1009,97 @@ document.addEventListener('keydown', e => {
         return;
     }
 
-    const idx = parseInt(e.key) - 1;
-    if (isNaN(idx) || idx < 0 || idx > 8) return;
-    if (activeKeyHolds.has(idx)) return; // cegah key-repeat trigger berulang
-
+    // 1-9 = member 1-9, 0 = member 10
+    let idx = parseInt(e.key) - 1;
+    if (e.key === '0') idx = 9;
+    if (isNaN(idx) || idx < 0 || idx > 9) {
+        // Ad-Libs: Q-P = QWERTYUIOP
+        handleAdLibKeyDown(e);
+        return;
+    }
+    if (activeKeyHolds.has(idx)) return;
     const items = document.querySelectorAll('.strip-item');
     const item = items[idx];
     if (!item) return;
-
     activeKeyHolds.add(idx);
     item.dispatchEvent(new MouseEvent('mousedown'));
 });
 
 document.addEventListener('keyup', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    const idx = parseInt(e.key) - 1;
-    if (isNaN(idx) || idx < 0 || idx > 8) return;
+    let idx = parseInt(e.key) - 1;
+    if (e.key === '0') idx = 9;
+    if (isNaN(idx) || idx < 0 || idx > 9) {
+        handleAdLibKeyUp(e);
+        return;
+    }
     activeKeyHolds.delete(idx);
-
     const items = document.querySelectorAll('.strip-item');
     const item = items[idx];
     if (!item) return;
     item.dispatchEvent(new MouseEvent('mouseup'));
 });
 
-// Kalau window kehilangan fokus saat tombol ditahan, lepas semua biar timer tidak nyangkut
+// Window blur — lepas semua
 window.addEventListener('blur', () => {
     activeKeyHolds.forEach(idx => {
         const item = document.querySelectorAll('.strip-item')[idx];
         if (item) item.dispatchEvent(new MouseEvent('mouseup'));
     });
     activeKeyHolds.clear();
+    // Juga clear semua adlib
+    activeAdLibKeys.forEach(idx => clearAdLib(idx));
+    activeAdLibKeys.clear();
 });
+
+// ══════════════════════════════════════════
+//  AD-LIBS (Q-P)
+// ══════════════════════════════════════════
+const AD_KEYS = 'QWERTYUIOP'.split('');
+const activeAdLibKeys = new Set();
+let adLibIntervals = {};
+
+function handleAdLibKeyDown(e) {
+    const key = e.key.toUpperCase();
+    const idx = AD_KEYS.indexOf(key);
+    if (idx < 0) return;
+    if (activeAdLibKeys.has(idx)) return;
+    const items = document.querySelectorAll('.strip-item');
+    const item = items[idx];
+    if (!item) return;
+    activeAdLibKeys.add(idx);
+    startAdLib(idx, item);
+}
+
+function handleAdLibKeyUp(e) {
+    const key = e.key.toUpperCase();
+    const idx = AD_KEYS.indexOf(key);
+    if (idx < 0) return;
+    activeAdLibKeys.delete(idx);
+    clearAdLib(idx);
+}
+
+function startAdLib(idx, item) {
+    item.classList.add('adlib-active');
+    const wrap = item.querySelector('.strip-avatar-wrap');
+    if (wrap) wrap.classList.add('adlib-glow');
+    // Highlight kartu member di leaderboard juga
+    const n = item.dataset.name;
+    const card = [...memberList.children].find(c => c.dataset.name === n);
+    if (card) card.classList.add('adlib-card');
+}
+
+function clearAdLib(idx) {
+    const items = document.querySelectorAll('.strip-item');
+    const item = items[idx];
+    if (!item) return;
+    item.classList.remove('adlib-active');
+    const wrap = item.querySelector('.strip-avatar-wrap');
+    if (wrap) wrap.classList.remove('adlib-glow');
+    const n = item.dataset.name;
+    const card = [...memberList.children].find(c => c.dataset.name === n);
+    if (card) card.classList.remove('adlib-card');
+}
 
 // Tutup modal klik backdrop
 document.querySelectorAll('.modal-overlay').forEach(el => {
@@ -1042,29 +1116,47 @@ function openPresentation() {
     const names = Object.keys(memberDurations);
     if (names.length === 0) { showToast('⚠️ No members to present'); return; }
 
-    // Sinkron media ke presentation player
-    const vidSrc = document.getElementById('localMedia').src;
-    const audSrc = document.getElementById('audioPlayer').src;
     const pressVid = document.getElementById('pressVideo');
     const pressAud = document.getElementById('pressAudio');
     const pressYt  = document.getElementById('pressYtWrap');
 
+    // Reset dulu
     pressVid.style.display = 'none';
     pressAud.style.display = 'none';
     pressYt.style.display  = 'none';
+    pressVid.src = '';
+    pressAud.src = '';
 
-    if (vidSrc && document.getElementById('localMedia').style.display !== 'none') {
-        pressVid.src = vidSrc;
+    const localVid = document.getElementById('localMedia');
+    const localAud = document.getElementById('audioPlayer');
+
+    if (localVid.style.display !== 'none' && localVid.src) {
+        // Clone src video lokal
+        pressVid.src = localVid.src;
+        pressVid.currentTime = localVid.currentTime;
         pressVid.style.display = 'block';
-    } else if (audSrc && document.getElementById('audioPlayer').style.display !== 'none') {
-        pressAud.src = audSrc;
+    } else if (localAud.style.display !== 'none' && localAud.src) {
+        pressAud.src = localAud.src;
+        pressAud.currentTime = localAud.currentTime;
         pressAud.style.display = 'block';
     } else if (window.ytPlayer) {
+        // Embed YouTube iframe langsung
         pressYt.style.display = 'block';
+        pressYt.innerHTML = '';
+        const videoId = window._currentYtVideoId || '';
+        if (videoId) {
+            pressYt.innerHTML = `<iframe
+                width="100%" height="280"
+                src="https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen
+                style="border-radius:12px;">
+            </iframe>`;
+        }
     }
 
-    const overlay = document.getElementById('presentationOverlay');
-    overlay.style.display = 'flex';
+    document.getElementById('presentationOverlay').style.display = 'flex';
     renderPresentationBars();
 }
 
@@ -1112,14 +1204,16 @@ function renderPresentationBars() {
 
 // Update presentation bars real-time saat rekam
 let _pressReorderTimer = null;
+let _pressIsReordering = false;
 
 function updatePresentationLive() {
     const overlay = document.getElementById('presentationOverlay');
     if (!overlay || overlay.style.display === 'none') return;
     const names = Object.keys(memberDurations);
+    if (names.length === 0) return;
     const maxDur = Math.max(...Object.values(memberDurations), 0.001);
 
-    // Update bar & time — setiap tick
+    // Update bar & time langsung — tidak sentuh DOM struktur
     names.forEach(n => {
         const bar  = document.getElementById(`pbar-${CSS.escape(n)}`);
         const time = document.getElementById(`ptime-${CSS.escape(n)}`);
@@ -1127,36 +1221,49 @@ function updatePresentationLive() {
         if (time) time.textContent = memberDurations[n].toFixed(1) + 's';
     });
 
-    // Reorder — throttle ke 800ms agar FLIP tidak berkonflik
-    if (_pressReorderTimer) return;
+    // Reorder — throttle 1000ms, skip kalau sedang animasi
+    if (_pressReorderTimer || _pressIsReordering) return;
     _pressReorderTimer = setTimeout(() => {
         _pressReorderTimer = null;
         const container = document.getElementById('pressBars');
-        if (!container) return;
+        if (!container || container.children.length === 0) return;
+
+        _pressIsReordering = true;
         const rows = [...container.children];
         const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
+
+        // Cek apakah urutan perlu berubah
+        const currentOrder = rows.map(r => r.dataset.name);
+        const needsReorder = sorted.some((n, i) => n !== currentOrder[i]);
+        if (!needsReorder) { _pressIsReordering = false; return; }
+
+        // FLIP
         const firstRects = new Map(rows.map(r => [r.dataset.name, r.getBoundingClientRect()]));
         sorted.forEach(n => {
             const row = rows.find(r => r.dataset.name === n);
             if (row) container.appendChild(row);
         });
-        rows.forEach(row => {
-            const n = row.dataset.name;
-            const first = firstRects.get(n);
-            if (!first) return;
-            const last = row.getBoundingClientRect();
-            const dy = first.top - last.top;
-            if (Math.abs(dy) < 1) return;
-            row.style.transition = 'none';
-            row.style.transform = `translateY(${dy}px)`;
+
+        requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    row.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                    row.style.transform = '';
+                rows.forEach(row => {
+                    const n = row.dataset.name;
+                    const first = firstRects.get(n);
+                    if (!first) return;
+                    const last = row.getBoundingClientRect();
+                    const dy = first.top - last.top;
+                    if (Math.abs(dy) < 1) return;
+                    row.style.transition = 'none';
+                    row.style.transform = `translateY(${dy}px)`;
+                    requestAnimationFrame(() => {
+                        row.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        row.style.transform = '';
+                    });
                 });
+                setTimeout(() => { _pressIsReordering = false; }, 700);
             });
         });
-    }, 800);
+    }, 1000);
 }
 
 window.onload = () => {
