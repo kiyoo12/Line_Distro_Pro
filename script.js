@@ -1167,6 +1167,11 @@ function closePresentation() {
 
 
 
+// Safe ID untuk elemen presentasi
+function pressId(prefix, name) {
+    return prefix + name.replace(/[^a-zA-Z0-9]/g, '_');
+}
+
 function renderPresentationBars() {
     const container = document.getElementById('pressBars');
     container.innerHTML = '';
@@ -1187,18 +1192,18 @@ function renderPresentationBars() {
         row.style.setProperty('--press-color', c);
         row.innerHTML = `
             <img src="${memberPhotos[n]}" class="press-avatar"
-                 id="pavatar-${CSS.escape(n)}"
+                 id="${pressId('pavatar-',n)}"
                  style="border-color:${c}; box-shadow:0 0 14px 2px ${c}55;"
                  onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
             <div class="press-member-info">
                 <span class="press-name">${n}</span>
                 <div class="press-bar-wrap">
                     <div class="press-bar"
-                         id="pbar-${CSS.escape(n)}"
+                         id="${pressId('pbar-',n)}"
                          style="width:${barPct}%; background:linear-gradient(90deg,${c}99,${c});"></div>
                 </div>
             </div>
-            <span class="press-time" id="ptime-${CSS.escape(n)}">${memberDurations[n].toFixed(1)}s</span>`;
+            <span class="press-time" id="${pressId('ptime-',n)}">${memberDurations[n].toFixed(1)}s</span>`;
         container.appendChild(row);
     });
 }
@@ -1216,9 +1221,9 @@ function updatePresentationLive() {
 
     // Update bar, time, dan avatar glow langsung
     names.forEach(n => {
-        const bar    = document.getElementById(`pbar-${CSS.escape(n)}`);
-        const time   = document.getElementById(`ptime-${CSS.escape(n)}`);
-        const avatar = document.getElementById(`pavatar-${CSS.escape(n)}`);
+        const bar    = document.getElementById(pressId('pbar-', n));
+        const time   = document.getElementById(pressId('ptime-', n));
+        const avatar = document.getElementById(pressId('pavatar-', n));
         const c      = memberColors[n] || '#a78bfa';
 
         if (bar) bar.style.width = ((memberDurations[n] / maxDur) * 100).toFixed(1) + '%';
@@ -1274,7 +1279,7 @@ function updatePresentationLive() {
                         row.style.transform = '';
                     });
                 });
-                setTimeout(() => { _pressIsReordering = false; }, 700);
+                setTimeout(() => { _pressIsReordering = false; }, 650);
             });
         });
     }, 1000);
