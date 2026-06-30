@@ -1,6 +1,6 @@
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  TOTAL DURASI LIVE
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function updateTotalDuration() {
     const el = document.getElementById('totalDurationDisplay');
     if (!el) return;
@@ -8,9 +8,9 @@ function updateTotalDuration() {
     el.textContent = `Total: ${total.toFixed(1)}s`;
 }
 
-// ══════════════════════════════════════════
-//  PHOTO HELPER
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  PHOTO HELPER — compress + resize base64
+// ═══════════════════════════════════════════════════
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -36,9 +36,7 @@ function fileToBase64(file) {
     });
 }
 
-function savePhotoCache() {
-    localStorage.setItem('linedistro_photos', JSON.stringify(memberPhotos));
-}
+function savePhotoCache() { localStorage.setItem('linedistro_photos', JSON.stringify(memberPhotos)); }
 
 function loadPhotoCache() {
     const raw = localStorage.getItem('linedistro_photos');
@@ -65,9 +63,9 @@ function showFileName(input, labelId, defaultText) {
     span.textContent = text;
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  STATE
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 const memberList = document.getElementById('memberList');
 let memberDurations = {},
     memberColors = {},
@@ -75,9 +73,9 @@ let memberDurations = {},
 let memberIntervals = {};
 let chartInstance = null;
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  TOAST & CONFIRM & PROMPT
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 let _undoTimer = null,
     _undoCallback = null;
 
@@ -176,9 +174,9 @@ document.getElementById('promptInput').addEventListener('keydown', e => {
     if (e.key === 'Escape') closePrompt();
 });
 
-// ══════════════════════════════════════════
-//  1. RENDER MEMBER STRIP
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  1. RENDER MEMBER STRIP — 5 per row
+// ═══════════════════════════════════════════════════
 const memberStrip = document.getElementById('memberStrip');
 
 function renderStripItem(n, c, p, index) {
@@ -247,11 +245,10 @@ function renderStripItem(n, c, p, index) {
         clearInterval(rippleInterval);
         rippleInterval = null;
         item.classList.remove('holding');
-        // Hapus is-active dengan transisi
         const card = [...memberList.children].find(c => c.dataset.name === n);
         if (card) {
             card.classList.remove('is-active');
-            // Force reflow agar transisi berjalan
+            // Force reflow for reverse animation
             void card.offsetWidth;
         }
         reorderLeaderboard();
@@ -273,9 +270,9 @@ function reloadMemberStrip() {
     Object.keys(memberDurations).forEach((n, i) => renderStripItem(n, memberColors[n], memberPhotos[n], i));
 }
 
-// ══════════════════════════════════════════
-//  1b. LEADERBOARD
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  1b. LEADERBOARD (with smooth bar)
+// ═══════════════════════════════════════════════════
 function renderMemberCard(n, c, p, d) {
     const card = document.createElement('div');
     card.className = 'member-card';
@@ -298,7 +295,7 @@ function renderMemberCard(n, c, p, d) {
                 </div>
                 <div class="member-bar-wrap">
                     <div class="member-bar" id="bar-${CSS.escape(n)}"
-                         style="background:linear-gradient(90deg,${c}88,${c}); transform:scaleX(0);"></div>
+                         style="background:linear-gradient(90deg,${c}88,${c});"></div>
                 </div>
             </div>
             <div class="member-actions">
@@ -334,7 +331,7 @@ function applyRankStyles() {
         const bar = card.querySelector('.member-bar');
         if (bar) {
             const pct = ((memberDurations[n] || 0) / maxDur);
-            bar.style.transform = `scaleX(${Math.min(pct, 1)})`;
+            bar.style.transform = `scaleX(${pct})`;
         }
     });
 }
@@ -353,15 +350,15 @@ function updateLeaderboardLive() {
         const el = card.querySelector('.member-time');
         if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
         const isActive = !!memberIntervals[n];
+        const isAdlib = card.classList.contains('adlib-card');
         if (card.classList.contains('is-active') !== isActive) {
             card.classList.toggle('is-active', isActive);
-            // Force reflow agar transisi berjalan
             if (!isActive) void card.offsetWidth;
         }
         const bar = card.querySelector('.member-bar');
         if (bar) {
             const pct = ((memberDurations[n] || 0) / _lastMaxDur);
-            bar.style.transform = `scaleX(${Math.min(pct, 1)})`;
+            bar.style.transform = `scaleX(${pct})`;
         }
     });
 }
@@ -398,9 +395,9 @@ function reorderLeaderboard() {
     });
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  2. TAMBAH & KELOLA MEMBER
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 async function addNewMember() {
     const n = document.getElementById('memberName').value.trim();
     if (!n) { showToast('⚠️ Member name cannot be empty'); return; }
@@ -474,9 +471,9 @@ function confirmResetAll() {
         } });
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  3. EDIT MEMBER
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function refreshEditDropdown() {
     const sel = document.getElementById('editMemberSelect');
     const cur = sel.value;
@@ -538,9 +535,9 @@ async function applyEdit() {
     }
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  4. PRESET
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function getPresets() { return JSON.parse(localStorage.getItem('linedistro_presets') || '{}'); }
 
 function savePresets(d) { localStorage.setItem('linedistro_presets', JSON.stringify(d)); }
@@ -634,9 +631,9 @@ function deleteSelectedPreset() {
         } });
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  5. MEDIA
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function loadLocalMedia(input) {
     const file = input.files[0];
     if (!file) return;
@@ -663,7 +660,7 @@ function loadLocalMedia(input) {
 
 function loadVideo() {
     const url = document.getElementById('ytLink').value.trim();
-    const v = (url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&]{11})/)) ? .[1];
+    const v = (url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&]{11})/))?.[1];
     if (!v) { showToast('⚠️ Link YouTube tidak valid'); return; }
     document.getElementById('localMedia').style.display = 'none';
     document.getElementById('audioPlayer').style.display = 'none';
@@ -674,9 +671,9 @@ function loadVideo() {
     if (window.ytPlayer) { window.ytPlayer.loadVideoById(v); } else { window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v }); }
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  6. FINISH & CHART
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function finish() {
     const names = Object.keys(memberDurations);
     if (names.length === 0) { showToast('No members added yet'); return; }
@@ -703,7 +700,7 @@ function finish() {
             <div class="rank-name">
                 <img src="${memberPhotos[n]}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;"
                      onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}'">
-                <span class="rank-badge">${i + 1}</span>
+                <span class="rank-badge">${i+1}</span>
                 <span>${n}</span>
             </div>
             <div class="rank-meta">
@@ -747,9 +744,9 @@ function finish() {
 
 function closeResultModal() { document.getElementById('resultModal').style.display = 'none'; }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  7. HISTORY
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function getHistory() { return JSON.parse(localStorage.getItem('linedistro_history') || '[]'); }
 
 function saveHistory(d) { localStorage.setItem('linedistro_history', JSON.stringify(d)); }
@@ -848,7 +845,7 @@ function openHistory() {
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <div class="history-avatars">
-                            ${entry.members.slice(0, 4).map(m =>
+                            ${entry.members.slice(0,4).map(m =>
                                 `<img src="${m.photo}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'"/>`
                             ).join('')}
                             ${entry.members.length > 4 ? `<span class="history-more">+${entry.members.length - 4}</span>` : ''}
@@ -859,11 +856,11 @@ function openHistory() {
                 <div class="history-detail" id="detail-${entry.id}">
                     <div style="padding-top:10px; display:flex; flex-direction:column; gap:6px;">
                         ${entry.members.map((m, i) => `
-                            <div class="rank-item" style="border-left-color:${m.color}; cursor:pointer;" onclick="openMemberStats('${m.name.replace(/'/g, "\\'")}')">
+                            <div class="rank-item" style="border-left-color:${m.color}; cursor:pointer;" onclick="openMemberStats('${m.name.replace(/'/g,"\\'")}')">
                                 <div class="rank-name">
                                     <img src="${m.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;"
                                          onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}'">
-                                    <span class="rank-badge">${i + 1}</span>
+                                    <span class="rank-badge">${i+1}</span>
                                     <span>${m.name}</span>
                                 </div>
                                 <div class="rank-meta">
@@ -906,9 +903,9 @@ function confirmClearHistory() {
 
 function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  8. KEYBOARD SHORTCUTS
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 const activeKeyHolds = new Set();
 document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -956,14 +953,14 @@ window.addEventListener('blur', () => {
     activeAdLibKeys.clear();
 });
 
-// ══════════════════════════════════════════
-//  AD-LIBS (Q-P) — smoother increment
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  AD-LIBS (Q-P) — hijau glow & bar berubah
+// ═══════════════════════════════════════════════════
 const AD_KEYS = 'QWERTYUIOP'.split('');
 const activeAdLibKeys = new Set();
 let adLibIntervals = {};
 
-function addAdLibTime(memberName, amount = 0.05) {
+function addAdLibTime(memberName, amount = 0.5) {
     if (!memberDurations[memberName]) return;
     memberDurations[memberName] = (memberDurations[memberName] || 0) + amount;
     const timeLabel = document.getElementById(`strip-time-${CSS.escape(memberName)}`);
@@ -989,12 +986,10 @@ function handleAdLibKeyDown(e) {
     if (!n) return;
     activeAdLibKeys.add(idx);
     startAdLib(idx, item);
-    // Tambah langsung 0.05 detik
-    addAdLibTime(n, 0.05);
-    // Lanjutkan setiap 200ms dengan 0.05 detik
+    addAdLibTime(n, 0.5);
     if (adLibIntervals[idx]) clearInterval(adLibIntervals[idx]);
     adLibIntervals[idx] = setInterval(() => {
-        addAdLibTime(n, 0.05);
+        addAdLibTime(n, 0.5);
     }, 200);
 }
 
@@ -1018,11 +1013,11 @@ function startAdLib(idx, item) {
     const card = [...memberList.children].find(c => c.dataset.name === n);
     if (card) {
         card.classList.add('adlib-card');
-        // Ad-lib glow pada avatar
-        const avatar = card.querySelector('.member-avatar');
-        if (avatar) {
-            avatar.style.borderColor = '#4ade80';
-            avatar.style.boxShadow = '0 0 20px 6px rgba(74,222,128,0.6)';
+        // Ubah warna bar menjadi hijau glow
+        const bar = card.querySelector('.member-bar');
+        if (bar) {
+            bar.style.background = 'linear-gradient(90deg, #4ade80, #22d3ee)';
+            bar.style.boxShadow = '0 0 12px #4ade80';
         }
     }
 }
@@ -1038,10 +1033,12 @@ function clearAdLib(idx) {
     const card = [...memberList.children].find(c => c.dataset.name === n);
     if (card) {
         card.classList.remove('adlib-card');
-        const avatar = card.querySelector('.member-avatar');
-        if (avatar) {
-            avatar.style.borderColor = memberColors[n] || '#a78bfa';
-            avatar.style.boxShadow = `0 0 10px 2px ${memberColors[n] || '#a78bfa'}44`;
+        // Kembalikan warna bar ke warna asli
+        const bar = card.querySelector('.member-bar');
+        if (bar) {
+            const c = memberColors[n] || '#a78bfa';
+            bar.style.background = `linear-gradient(90deg, ${c}88, ${c})`;
+            bar.style.boxShadow = 'none';
         }
     }
 }
@@ -1051,50 +1048,40 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
     el.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; });
 });
 
-// ══════════════════════════════════════════
-//  9. PRESENTATION MODE
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  9. PRESENTATION MODE — video background
+// ═══════════════════════════════════════════════════
 function openPresentation() {
     const names = Object.keys(memberDurations);
     if (names.length === 0) { showToast('⚠️ No members to present'); return; }
-    const pressVid = document.getElementById('pressBgVideo');
-    const pressAud = document.getElementById('pressBgAudio');
+
+    const bgVideo = document.getElementById('pressBgVideo');
+    const bgAudio = document.getElementById('pressBgAudio');
     const localVid = document.getElementById('localMedia');
     const localAud = document.getElementById('audioPlayer');
 
     // Sembunyikan semua dulu
-    pressVid.style.display = 'none';
-    pressAud.style.display = 'none';
-    pressVid.src = '';
-    pressAud.src = '';
+    bgVideo.style.display = 'none';
+    bgAudio.style.display = 'none';
+    bgVideo.src = '';
+    bgAudio.src = '';
 
     if (localVid.style.display !== 'none' && localVid.src) {
-        pressVid.src = localVid.src;
-        pressVid.currentTime = localVid.currentTime;
-        pressVid.style.display = 'block';
-        pressVid.muted = true;
-        pressVid.play().catch(() => {});
+        bgVideo.src = localVid.src;
+        bgVideo.currentTime = localVid.currentTime;
+        bgVideo.style.display = 'block';
+        if (!localVid.paused) bgVideo.play();
     } else if (localAud.style.display !== 'none' && localAud.src) {
-        pressAud.src = localAud.src;
-        pressAud.currentTime = localAud.currentTime;
-        pressAud.style.display = 'block';
-        pressAud.muted = true;
-        pressAud.play().catch(() => {});
+        bgAudio.src = localAud.src;
+        bgAudio.currentTime = localAud.currentTime;
+        bgAudio.style.display = 'block';
+        if (!localAud.paused) bgAudio.play();
     } else if (window.ytPlayer) {
-        // YouTube sebagai background pakai iframe
+        // YouTube tidak bisa di-background, fallback ke blur
         const wrap = document.getElementById('pressBgVideoWrap');
-        wrap.innerHTML = '';
-        const videoId = window._currentYtVideoId || '';
-        if (videoId) {
-            wrap.innerHTML = `<iframe
-                width="100%" height="100%"
-                src="https://www.youtube.com/embed/${videoId}?autoplay=1&loop=1&controls=0&rel=0&mute=1&playlist=${videoId}"
-                frameborder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowfullscreen
-                style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">
-            </iframe>`;
-        }
+        wrap.style.opacity = '0.1';
+        wrap.style.background = '#000';
+        showToast('⚠️ YouTube tidak bisa di-background, gunakan MP4/Audio');
     }
 
     document.getElementById('presentationOverlay').style.display = 'flex';
@@ -1105,29 +1092,27 @@ function closePresentation() {
     document.getElementById('presentationOverlay').style.display = 'none';
     if (_pressReorderTimer) { clearTimeout(_pressReorderTimer);
         _pressReorderTimer = null; }
-    // Hentikan video background
-    const pressVid = document.getElementById('pressBgVideo');
-    if (pressVid) { pressVid.pause();
-        pressVid.src = ''; }
-    const pressAud = document.getElementById('pressBgAudio');
-    if (pressAud) { pressAud.pause();
-        pressAud.src = ''; }
+    // Hentikan background video
+    const bgVideo = document.getElementById('pressBgVideo');
+    const bgAudio = document.getElementById('pressBgAudio');
+    if (bgVideo) { bgVideo.pause(); }
+    if (bgAudio) { bgAudio.pause(); }
 }
 
 function syncPresentationMedia() {
+    const bgVideo = document.getElementById('pressBgVideo');
+    const bgAudio = document.getElementById('pressBgAudio');
     const localVid = document.getElementById('localMedia');
-    const pressVid = document.getElementById('pressBgVideo');
     const localAud = document.getElementById('audioPlayer');
-    const pressAud = document.getElementById('pressBgAudio');
 
-    if (localVid.style.display !== 'none' && pressVid.style.display !== 'none') {
-        pressVid.currentTime = localVid.currentTime;
-        if (!localVid.paused) pressVid.play();
-        else pressVid.pause();
-    } else if (localAud.style.display !== 'none' && pressAud.style.display !== 'none') {
-        pressAud.currentTime = localAud.currentTime;
-        if (!localAud.paused) pressAud.play();
-        else pressAud.pause();
+    if (localVid.style.display !== 'none' && bgVideo.style.display !== 'none') {
+        bgVideo.currentTime = localVid.currentTime;
+        if (!localVid.paused) bgVideo.play();
+        else bgVideo.pause();
+    } else if (localAud.style.display !== 'none' && bgAudio.style.display !== 'none') {
+        bgAudio.currentTime = localAud.currentTime;
+        if (!localAud.paused) bgAudio.play();
+        else bgAudio.pause();
     }
     showToast('⏱ Synced');
 }
@@ -1154,24 +1139,23 @@ function renderPresentationBars() {
         row.style.animationDelay = (i * 0.06) + 's';
         row.style.setProperty('--press-color', c);
         const isRecording = !!memberIntervals[n];
-        const isAdlib = [...document.querySelectorAll('.strip-item.adlib-active')].some(el => el.dataset.name === n);
+        const isAdlib = false; // Kita tidak track adlib di presentasi
         const avatarScale = isRecording ? 'scale(1.15)' : 'scale(1)';
-        const avatarShadow = isRecording ? `0 0 28px 8px ${c}99` : (isAdlib ? `0 0 28px 8px rgba(74,222,128,0.7)` : `0 0 14px 2px ${c}44`);
-        const borderColor = isAdlib ? '#4ade80' : c;
+        const avatarShadow = isRecording ? `0 0 28px 8px ${c}99` : `0 0 14px 2px ${c}44`;
         row.innerHTML = `
             <img src="${memberPhotos[n]}" class="press-avatar"
-                 id="${pressId('pavatar-', n)}"
-                 style="border-color:${borderColor}; transform:${avatarScale}; box-shadow:${avatarShadow};"
+                 id="${pressId('pavatar-',n)}"
+                 style="border-color:${c}; transform:${avatarScale}; box-shadow:${avatarShadow};"
                  onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
             <div class="press-member-info">
                 <span class="press-name">${n}</span>
                 <div class="press-bar-wrap">
                     <div class="press-bar"
-                         id="${pressId('pbar-', n)}"
-                         style="transform:scaleX(${Math.min(barPct, 1)}); background:linear-gradient(90deg,${isAdlib ? '#4ade80' : c}99,${isAdlib ? '#4ade80' : c});${isAdlib ? 'box-shadow:0 0 12px #4ade80;' : ''}"></div>
+                         id="${pressId('pbar-',n)}"
+                         style="background:linear-gradient(90deg,${c}99,${c}); transform:scaleX(${barPct});"></div>
                 </div>
             </div>
-            <span class="press-time" id="${pressId('ptime-', n)}">${memberDurations[n].toFixed(1)}s</span>`;
+            <span class="press-time" id="${pressId('ptime-',n)}">${memberDurations[n].toFixed(1)}s</span>`;
         container.appendChild(row);
     });
 }
@@ -1189,24 +1173,15 @@ function updatePresentationLive() {
         const time = row.querySelector('.press-time');
         const avatar = row.querySelector('.press-avatar');
         const c = memberColors[n] || '#a78bfa';
-        const isRecording = !!memberIntervals[n];
-        const isAdlib = [...document.querySelectorAll('.strip-item.adlib-active')].some(el => el.dataset.name === n);
         if (bar) {
             const pct = ((memberDurations[n] || 0) / maxDur);
-            bar.style.transform = `scaleX(${Math.min(pct, 1)})`;
-            if (isAdlib) {
-                bar.style.background = 'linear-gradient(90deg, #4ade80, #22d3ee)';
-                bar.style.boxShadow = '0 0 12px #4ade80';
-            } else {
-                bar.style.background = `linear-gradient(90deg, ${c}99, ${c})`;
-                bar.style.boxShadow = '';
-            }
+            bar.style.transform = `scaleX(${pct})`;
         }
         if (time) time.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
         if (avatar) {
-            avatar.style.transform = isRecording ? 'scale(1.15)' : 'scale(1)';
-            avatar.style.boxShadow = isRecording ? `0 0 28px 8px ${c}99` : (isAdlib ? `0 0 28px 8px rgba(74,222,128,0.7)` : `0 0 14px 2px ${c}44`);
-            avatar.style.borderColor = isAdlib ? '#4ade80' : c;
+            const rec = !!memberIntervals[n];
+            avatar.style.transform = rec ? 'scale(1.15)' : 'scale(1)';
+            avatar.style.boxShadow = rec ? `0 0 28px 8px ${c}99` : `0 0 14px 2px ${c}44`;
         }
     });
     if (_pressReorderTimer || _pressIsReordering) return;
@@ -1248,9 +1223,9 @@ function updatePresentationLive() {
     }, 600);
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  10. INIT
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 window.onload = () => {
     loadPhotoCache();
     refreshPresetDropdown();
