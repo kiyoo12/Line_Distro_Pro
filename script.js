@@ -17,11 +17,9 @@ function fileToBase64(file) {
         const objectUrl = URL.createObjectURL(file);
 
         img.onload = () => {
-            // Target max: 256x256px, kualitas 0.82
             const MAX = 256;
             let w = img.width;
             let h = img.height;
-
             if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
             else        { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
 
@@ -30,7 +28,6 @@ function fileToBase64(file) {
             canvas.height = h;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
-
             URL.revokeObjectURL(objectUrl);
             resolve(canvas.toDataURL('image/jpeg', 0.82));
         };
@@ -40,9 +37,19 @@ function fileToBase64(file) {
     });
 }
 
-// Simpan/ambil semua foto ke localStorage (per member)
 function savePhotoCache() {
     localStorage.setItem('linedistro_photos', JSON.stringify(memberPhotos));
+}
+
+function loadPhotoCache() {
+    const raw = localStorage.getItem('linedistro_photos');
+    if (!raw) return;
+    const cached = JSON.parse(raw);
+    Object.entries(cached).forEach(([n, url]) => {
+        if (url && !url.startsWith('blob:')) {
+            memberPhotos[n] = url;
+        }
+    });
 }
 
 // ══════════════════════════════════════════
@@ -55,29 +62,15 @@ function showFileName(input, labelId, defaultText) {
     const text = file
         ? `📄 ${file.name.length > 24 ? file.name.substring(0, 22) + '…' : file.name}`
         : defaultText;
-    // Cari span yang sudah ada
     let span = label.querySelector('.file-label-text');
     if (!span) {
         span = document.createElement('span');
         span.className = 'file-label-text';
-        // Delete text node secara aman (snapshot dulu, baru hapus)
         const textNodes = Array.from(label.childNodes).filter(n => n.nodeType === Node.TEXT_NODE);
         textNodes.forEach(n => n.remove());
         label.insertBefore(span, label.firstChild);
     }
     span.textContent = text;
-}
-
-function loadPhotoCache() {
-    const raw = localStorage.getItem('linedistro_photos');
-    if (!raw) return;
-    const cached = JSON.parse(raw);
-    // Hanya ambil yang base64 (bukan blob:// yang sudah kadaluarsa)
-    Object.entries(cached).forEach(([n, url]) => {
-        if (url && !url.startsWith('blob:')) {
-            memberPhotos[n] = url;
-        }
-    });
 }
 
 // ══════════════════════════════════════════
@@ -87,12 +80,11 @@ const memberList = document.getElementById('memberList');
 let memberDurations = {}, memberColors = {}, memberPhotos = {};
 let memberIntervals = {};
 let chartInstance = null;
+let _isPresentationOpen = false;
+let _pressSyncInterval = null;
 
 // ══════════════════════════════════════════
-//  TOAST (pengganti alert)
-// ══════════════════════════════════════════
-// ══════════════════════════════════════════
-//  UNDO TOAST
+//  TOAST
 // ══════════════════════════════════════════
 let _undoTimer = null;
 let _undoCallback = null;
@@ -137,7 +129,7 @@ function showToast(msg, duration = 2800) {
 }
 
 // ══════════════════════════════════════════
-//  CONFIRM MODAL (pengganti confirm/alert)
+//  CONFIRM MODAL
 // ══════════════════════════════════════════
 let _confirmCallback = null;
 
@@ -166,7 +158,7 @@ function confirmOk() {
 document.getElementById('confirmOkBtn').addEventListener('click', confirmOk);
 
 // ══════════════════════════════════════════
-//  PROMPT MODAL (pengganti prompt)
+//  PROMPT MODAL
 // ══════════════════════════════════════════
 let _promptCallback = null;
 
@@ -258,10 +250,11 @@ function renderStripItem(n, c, p, index) {
             timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
             updateLeaderboardLive();
             updateTotalDuration();
-            updatePresentationLive();
+            if (_isPresentationOpen) updatePresentationLive();
             if (Date.now() - lastReorder > 600) {
                 lastReorder = Date.now();
                 requestAnimationFrame(() => reorderLeaderboard());
+                if (_isPresentationOpen) requestAnimationFrame(() => reorderPresentation());
             }
         }, 50);
     }
@@ -273,10 +266,10 @@ function renderStripItem(n, c, p, index) {
         clearInterval(rippleInterval);
         rippleInterval = null;
         item.classList.remove('holding');
-        // Pastikan kartu leaderboard juga hapus is-active + rec-dot
         const card = [...memberList.children].find(c => c.dataset.name === n);
         if (card) card.classList.remove('is-active');
         reorderLeaderboard();
+        if (_isPresentationOpen) reorderPresentation();
     }
 
     item.addEventListener('mousedown', startHold);
@@ -349,7 +342,6 @@ function applyRankStyles() {
         if (i === 2) card.classList.add('rank-3');
         const rankEl = card.querySelector('.rank-num');
         if (rankEl) rankEl.textContent = (i + 1);
-        // Update progress bar
         const n = card.dataset.name;
         const bar = card.querySelector('.member-bar');
         if (bar) {
@@ -359,13 +351,11 @@ function applyRankStyles() {
     });
 }
 
-// Update angka waktu di leaderboard tanpa re-render/re-sort (dipanggil tiap tick saat hold)
 let _lastMaxDur = 0.001;
 let _maxDurTick = 0;
 
 function updateLeaderboardLive() {
     const all = [...memberList.children];
-    // Recalculate maxDur setiap 10 tick (~500ms) untuk hemat CPU
     if (Date.now() - _maxDurTick > 500) {
         _lastMaxDur = Math.max(...all.map(c => memberDurations[c.dataset.name] || 0), 0.001);
         _maxDurTick = Date.now();
@@ -382,16 +372,12 @@ function updateLeaderboardLive() {
     });
 }
 
-// FLIP animation: reorder leaderboard cards berdasarkan durasi terbaru
 function reorderLeaderboard() {
     const cards = [...memberList.children];
     if (cards.length === 0) return;
-
-    // FIRST: catat posisi lama
     const firstRects = new Map();
     cards.forEach(c => firstRects.set(c.dataset.name, c.getBoundingClientRect()));
 
-    // Urutkan ulang DOM berdasarkan durasi (LAST)
     const sortedNames = Object.keys(memberDurations).sort((a, b) => memberDurations[b] - memberDurations[a]);
     sortedNames.forEach(n => {
         const card = cards.find(c => c.dataset.name === n);
@@ -399,7 +385,6 @@ function reorderLeaderboard() {
     });
     applyRankStyles();
 
-    // INVERT + PLAY
     sortedNames.forEach(n => {
         const card = cards.find(c => c.dataset.name === n);
         if (!card) return;
@@ -408,14 +393,12 @@ function reorderLeaderboard() {
         if (!first) return;
         const dy = first.top - last.top;
         if (Math.abs(dy) < 1) return;
-        // Hanya override transition transform — bukan semua properti
         card.style.transition = 'transform 0s';
         card.style.transform = `translateY(${dy}px)`;
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 card.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
                 card.style.transform = '';
-                // Bersihkan setelah animasi selesai supaya CSS class bisa kembali kontrol
                 setTimeout(() => {
                     card.style.transition = '';
                     card.style.transform  = '';
@@ -440,7 +423,7 @@ async function addNewMember() {
     let photoUrl;
     if (f) {
         try {
-            photoUrl = await fileToBase64(f); // auto-compress ke max 256px, JPEG 82%
+            photoUrl = await fileToBase64(f);
         } catch (err) {
             console.error('fileToBase64 error:', err);
             showToast('❌ Failed to load photo, please try again');
@@ -456,7 +439,6 @@ async function addNewMember() {
 
     document.getElementById('memberName').value  = '';
     document.getElementById('memberPhoto').value = '';
-    // Reset label foto
     const photoLabel = document.getElementById('memberPhotoLabel');
     if (photoLabel) {
         let span = photoLabel.querySelector('.file-label-text');
@@ -474,11 +456,12 @@ function resetMember(n) {
     memberDurations[n] = 0;
     reloadMemberStrip();
     reloadMemberList();
-    // Undo toast — 3 detik untuk batalkan
+    if (_isPresentationOpen) { renderPresentationBars(); }
     showUndoToast(`↺ Reset ${n}`, () => {
         memberDurations[n] = prevDuration;
         reloadMemberStrip();
         reloadMemberList();
+        if (_isPresentationOpen) { renderPresentationBars(); }
         showToast(`↩ Undo reset ${n}`);
     });
 }
@@ -495,13 +478,13 @@ function confirmDeleteMember(n) {
 }
 
 function deleteMember(n) {
-    if (memberIntervals[n]) clearInterval(memberIntervals[n]);
-    memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== n));
-    memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== n));
-    memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== n));
-    memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== n));
+    if (memberIntervals[n]) { clearInterval(memberIntervals[n]); delete memberIntervals[n]; }
+    delete memberDurations[n];
+    delete memberColors[n];
+    delete memberPhotos[n];
     reloadMemberStrip();
     reloadMemberList();
+    if (_isPresentationOpen) { renderPresentationBars(); }
     showToast(`🗑 ${n} deleted`);
 }
 
@@ -520,6 +503,7 @@ function confirmResetAll() {
             });
             reloadMemberStrip();
             reloadMemberList();
+            if (_isPresentationOpen) { renderPresentationBars(); }
             showToast('↺ All durations reset');
         }
     });
@@ -574,10 +558,10 @@ async function applyEdit() {
             memberColors[newName]    = newColor;
             memberPhotos[newName]    = newPhoto;
             if (memberIntervals[oldName]) { memberIntervals[newName] = memberIntervals[oldName]; }
-            memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== oldName));
-            memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== oldName));
-            memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== oldName));
-            memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== oldName));
+            delete memberDurations[oldName];
+            delete memberColors[oldName];
+            delete memberPhotos[oldName];
+            if (memberIntervals[oldName]) delete memberIntervals[oldName];
         } else {
             memberColors[oldName] = newColor;
             memberPhotos[oldName] = newPhoto;
@@ -587,6 +571,7 @@ async function applyEdit() {
         closeEditModal();
         reloadMemberStrip();
         reloadMemberList();
+        if (_isPresentationOpen) { renderPresentationBars(); }
         showToast(`✅ ${newName} updated`);
     } catch(err) {
         console.error('applyEdit error:', err);
@@ -615,10 +600,7 @@ function saveNewPreset() {
     const members = Object.keys(memberDurations);
     if (members.length === 0) { showToast('⚠️ Add a member first'); return; }
 
-    // Pakai nama dari input songTitle sebagai default, atau minta input langsung
     const defaultName = document.getElementById('songTitle').value.trim();
-
-    // Tampilkan inline save bar
     const bar = document.getElementById('presetSaveBar');
     const inp = document.getElementById('presetSaveInput');
     if (!bar || !inp) return;
@@ -638,7 +620,6 @@ function doSavePreset() {
     savePresets(presets);
     refreshPresetDropdown();
 
-    // Pilih preset yang baru disimpan
     const sel = document.getElementById('presetSelect');
     if (sel) { sel.value = name; updatePresetDropdownColor(); }
 
@@ -656,7 +637,6 @@ function updatePresetDropdownColor() {
     if (!name) { sel.style.borderColor = ''; return; }
     const preset = getPresets()[name];
     if (!preset || preset.length === 0) return;
-    // Ambil warna member pertama di preset
     const firstColor = preset[0].color || '#a78bfa';
     sel.style.borderColor = firstColor;
     sel.style.boxShadow = `0 0 0 2px ${firstColor}22`;
@@ -674,12 +654,12 @@ function loadSelectedPreset() {
         preset.forEach(m => {
             memberDurations[m.name] = 0;
             memberColors[m.name]    = m.color || '#a78bfa';
-            // Foto dari preset sudah base64, langsung pakai
             memberPhotos[m.name]    = m.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=random`;
         });
         savePhotoCache();
         reloadMemberStrip();
         reloadMemberList();
+        if (_isPresentationOpen) { renderPresentationBars(); }
         showToast(`✅ Preset "${name}" loaded`);
     };
 
@@ -761,7 +741,6 @@ function finish() {
     if (names.length === 0) { showToast('No members added yet'); return; }
     const total = Object.values(memberDurations).reduce((a, b) => a + b, 0);
     if (total === 0) { showToast('All durations are 0 — record first!'); return; }
-    // Stop semua rekaman yang masih berjalan
     Object.keys(memberIntervals).forEach(n => {
         if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
         const card = [...memberList.children].find(c => c.dataset.name === n);
@@ -773,7 +752,6 @@ function finish() {
     const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
     const title  = document.getElementById('songTitle').value.trim() || 'Untitled';
 
-    // Leaderboard
     const lb = document.getElementById('leaderboard');
     lb.innerHTML = '';
     sorted.forEach((n, i) => {
@@ -862,7 +840,7 @@ function getMemberStats(memberName) {
             const m = e.members.find(x => x.name === memberName);
             return { title: e.title, date: e.date, duration: m.duration, pct: parseFloat(m.pct) };
         })
-        .reverse(); // oldest first for chart
+        .reverse();
 }
 
 function openMemberStats(memberName) {
@@ -998,7 +976,7 @@ function confirmClearHistory() {
 function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
 
 // ══════════════════════════════════════════
-//  8. KEYBOARD SHORTCUTS (1-9 = tahan member sesuai urutan di strip)
+//  8. KEYBOARD SHORTCUTS
 // ══════════════════════════════════════════
 const activeKeyHolds = new Set();
 
@@ -1009,17 +987,17 @@ document.addEventListener('keydown', e => {
         e.preventDefault();
         const vid = document.getElementById('localMedia');
         const aud = document.getElementById('audioPlayer');
-        if (vid.style.display !== 'none') { vid.paused ? vid.play() : vid.pause(); }
-        else if (aud.style.display !== 'none') { aud.paused ? aud.play() : aud.pause(); }
+        if (vid.style.display !== 'none' && vid.src) { vid.paused ? vid.play() : vid.pause(); }
+        else if (aud.style.display !== 'none' && aud.src) { aud.paused ? aud.play() : aud.pause(); }
         else if (window.ytPlayer) { window.ytPlayer.getPlayerState() === 1 ? window.ytPlayer.pauseVideo() : window.ytPlayer.playVideo(); }
+        // Sinkronkan ke presentation jika terbuka
+        if (_isPresentationOpen) syncMediaToPresentation();
         return;
     }
 
-    // 1-9 = member 1-9, 0 = member 10
     let idx = parseInt(e.key) - 1;
     if (e.key === '0') idx = 9;
     if (isNaN(idx) || idx < 0 || idx > 9) {
-        // Ad-Libs: Q-P = QWERTYUIOP
         handleAdLibKeyDown(e);
         return;
     }
@@ -1046,24 +1024,21 @@ document.addEventListener('keyup', e => {
     item.dispatchEvent(new MouseEvent('mouseup'));
 });
 
-// Window blur — lepas semua
 window.addEventListener('blur', () => {
     activeKeyHolds.forEach(idx => {
         const item = document.querySelectorAll('.strip-item')[idx];
         if (item) item.dispatchEvent(new MouseEvent('mouseup'));
     });
     activeKeyHolds.clear();
-    // Juga clear semua adlib
     activeAdLibKeys.forEach(idx => clearAdLib(idx));
     activeAdLibKeys.clear();
 });
 
 // ══════════════════════════════════════════
-//  AD-LIBS (Q-P)
+//  AD-LIBS (Q-P) — FIXED: posisi di kiri, glow hijau
 // ══════════════════════════════════════════
 const AD_KEYS = 'QWERTYUIOP'.split('');
 const activeAdLibKeys = new Set();
-let adLibIntervals = {};
 
 function handleAdLibKeyDown(e) {
     const key = e.key.toUpperCase();
@@ -1088,8 +1063,11 @@ function handleAdLibKeyUp(e) {
 function startAdLib(idx, item) {
     item.classList.add('adlib-active');
     const wrap = item.querySelector('.strip-avatar-wrap');
-    if (wrap) wrap.classList.add('adlib-glow');
-    // Highlight kartu member di leaderboard juga
+    if (wrap) {
+        wrap.classList.add('adlib-glow');
+        // Ubah warna glow menjadi hijau
+        wrap.style.setProperty('--adlib-glow-color', '#4ade80');
+    }
     const n = item.dataset.name;
     const card = [...memberList.children].find(c => c.dataset.name === n);
     if (card) card.classList.add('adlib-card');
@@ -1101,7 +1079,10 @@ function clearAdLib(idx) {
     if (!item) return;
     item.classList.remove('adlib-active');
     const wrap = item.querySelector('.strip-avatar-wrap');
-    if (wrap) wrap.classList.remove('adlib-glow');
+    if (wrap) {
+        wrap.classList.remove('adlib-glow');
+        wrap.style.setProperty('--adlib-glow-color', '');
+    }
     const n = item.dataset.name;
     const card = [...memberList.children].find(c => c.dataset.name === n);
     if (card) card.classList.remove('adlib-card');
@@ -1113,20 +1094,18 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 });
 
 // ══════════════════════════════════════════
-//  9. INIT
-// ══════════════════════════════════════════
-// ══════════════════════════════════════════
-//  MODE PRESENTASI
+//  9. MODE PRESENTASI — FIXED: reorder & bar real-time
 // ══════════════════════════════════════════
 function openPresentation() {
     const names = Object.keys(memberDurations);
     if (names.length === 0) { showToast('⚠️ No members to present'); return; }
 
+    _isPresentationOpen = true;
+
     const pressVid = document.getElementById('pressVideo');
     const pressAud = document.getElementById('pressAudio');
     const pressYt  = document.getElementById('pressYtWrap');
 
-    // Reset dulu
     pressVid.style.display = 'none';
     pressAud.style.display = 'none';
     pressYt.style.display  = 'none';
@@ -1137,16 +1116,17 @@ function openPresentation() {
     const localAud = document.getElementById('audioPlayer');
 
     if (localVid.style.display !== 'none' && localVid.src) {
-        // Clone src video lokal
         pressVid.src = localVid.src;
         pressVid.currentTime = localVid.currentTime;
         pressVid.style.display = 'block';
+        // Sinkronkan play/pause
+        if (!localVid.paused) pressVid.play();
     } else if (localAud.style.display !== 'none' && localAud.src) {
         pressAud.src = localAud.src;
         pressAud.currentTime = localAud.currentTime;
         pressAud.style.display = 'block';
+        if (!localAud.paused) pressAud.play();
     } else if (window.ytPlayer) {
-        // Embed YouTube iframe langsung
         pressYt.style.display = 'block';
         pressYt.innerHTML = '';
         const videoId = window._currentYtVideoId || '';
@@ -1164,16 +1144,36 @@ function openPresentation() {
 
     document.getElementById('presentationOverlay').style.display = 'flex';
     renderPresentationBars();
+
+    // Mulai sync interval untuk menjaga sinkronisasi video
+    if (_pressSyncInterval) clearInterval(_pressSyncInterval);
+    _pressSyncInterval = setInterval(syncMediaToPresentation, 500);
 }
 
 function closePresentation() {
+    _isPresentationOpen = false;
     document.getElementById('presentationOverlay').style.display = 'none';
     if (_pressReorderTimer) { clearTimeout(_pressReorderTimer); _pressReorderTimer = null; }
+    if (_pressSyncInterval) { clearInterval(_pressSyncInterval); _pressSyncInterval = null; }
+    // Hentikan semua interval presentasi
 }
 
+function syncMediaToPresentation() {
+    // Sinkronkan dari main ke presentation
+    const localVid = document.getElementById('localMedia');
+    const localAud = document.getElementById('audioPlayer');
+    const pressVid = document.getElementById('pressVideo');
+    const pressAud = document.getElementById('pressAudio');
 
+    if (localVid.style.display !== 'none' && localVid.src && pressVid.style.display !== 'none') {
+        pressVid.currentTime = localVid.currentTime;
+        if (localVid.paused) pressVid.pause(); else pressVid.play();
+    } else if (localAud.style.display !== 'none' && localAud.src && pressAud.style.display !== 'none') {
+        pressAud.currentTime = localAud.currentTime;
+        if (localAud.paused) pressAud.pause(); else pressAud.play();
+    }
+}
 
-// Safe ID untuk elemen presentasi
 function pressId(prefix, name) {
     return prefix + name.replace(/[^a-zA-Z0-9]/g, '_');
 }
@@ -1214,7 +1214,6 @@ function renderPresentationBars() {
     });
 }
 
-// Update presentation bars real-time saat rekam
 let _pressReorderTimer = null;
 let _pressIsReordering = false;
 
@@ -1228,7 +1227,7 @@ function updatePresentationLive() {
     const rows = [...container.children];
     const maxDur = Math.max(...Object.values(memberDurations), 0.001);
 
-    // ── 1. Update bar dan waktu (SAMA persis dengan mode normal) ──
+    // Update bar & waktu
     rows.forEach(row => {
         const n   = row.dataset.name;
         const bar = row.querySelector('.press-bar');
@@ -1245,7 +1244,7 @@ function updatePresentationLive() {
         }
     });
 
-    // ── 2. Reorder naik/turun (SAMA persis dengan reorderLeaderboard) ──
+    // Reorder (sama dengan reorderLeaderboard)
     if (_pressReorderTimer || _pressIsReordering) return;
     _pressReorderTimer = setTimeout(() => {
         _pressReorderTimer = null;
@@ -1255,23 +1254,18 @@ function updatePresentationLive() {
         const sortedNames = Object.keys(memberDurations)
             .sort((a, b) => memberDurations[b] - memberDurations[a]);
 
-        // Skip kalau urutan sudah benar
         const same = sortedNames.every((n, i) => curRows[i] && curRows[i].dataset.name === n);
         if (same) return;
 
         _pressIsReordering = true;
-
-        // FIRST — catat posisi lama
         const firstRects = new Map();
         curRows.forEach(r => firstRects.set(r.dataset.name, r.getBoundingClientRect()));
 
-        // LAST — reorder DOM
         sortedNames.forEach(n => {
             const row = curRows.find(r => r.dataset.name === n);
             if (row) container.appendChild(row);
         });
 
-        // INVERT + PLAY — double rAF sama seperti reorderLeaderboard
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 sortedNames.forEach(n => {
@@ -1298,13 +1292,15 @@ function updatePresentationLive() {
     }, 600);
 }
 
+// ══════════════════════════════════════════
+//  10. INIT
+// ══════════════════════════════════════════
 window.onload = () => {
     loadPhotoCache();
     refreshPresetDropdown();
     reloadMemberStrip();
     reloadMemberList();
 
-    // Bind semua async button lewat addEventListener (fix async onclick)
     const saveEditBtn = document.querySelector('#editModal .btn-primary');
     if (saveEditBtn) {
         saveEditBtn.removeAttribute('onclick');
@@ -1317,7 +1313,6 @@ window.onload = () => {
         addBtn.addEventListener('click', (e) => { e.preventDefault(); addNewMember(); });
     }
 
-    // Bind prompt modal Save button
     const promptSaveBtn = document.getElementById('promptSaveBtn');
     if (promptSaveBtn) {
         promptSaveBtn.removeAttribute('onclick');
@@ -1326,7 +1321,6 @@ window.onload = () => {
 
     updateTotalDuration();
 
-    // Enter key untuk preset save bar
     const presetSaveInput = document.getElementById('presetSaveInput');
     if (presetSaveInput) {
         presetSaveInput.addEventListener('keydown', e => {
