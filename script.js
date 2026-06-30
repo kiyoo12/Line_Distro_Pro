@@ -20,6 +20,7 @@ function fileToBase64(file) {
             const MAX = 256;
             let w = img.width;
             let h = img.height;
+
             if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
             else        { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
 
@@ -28,6 +29,7 @@ function fileToBase64(file) {
             canvas.height = h;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
+
             URL.revokeObjectURL(objectUrl);
             resolve(canvas.toDataURL('image/jpeg', 0.82));
         };
@@ -80,8 +82,6 @@ const memberList = document.getElementById('memberList');
 let memberDurations = {}, memberColors = {}, memberPhotos = {};
 let memberIntervals = {};
 let chartInstance = null;
-let _isPresentationOpen = false;
-let _pressSyncInterval = null;
 
 // ══════════════════════════════════════════
 //  TOAST
@@ -250,13 +250,12 @@ function renderStripItem(n, c, p, index) {
             timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
             updateLeaderboardLive();
             updateTotalDuration();
-            if (_isPresentationOpen) updatePresentationLive();
+            updatePresentationLive();
             if (Date.now() - lastReorder > 600) {
                 lastReorder = Date.now();
                 requestAnimationFrame(() => reorderLeaderboard());
-                if (_isPresentationOpen) requestAnimationFrame(() => reorderPresentation());
             }
-        }, 50);
+        }, 50); // <-- 50 ms interval untuk update bar
     }
 
     function stopHold() {
@@ -269,7 +268,7 @@ function renderStripItem(n, c, p, index) {
         const card = [...memberList.children].find(c => c.dataset.name === n);
         if (card) card.classList.remove('is-active');
         reorderLeaderboard();
-        if (_isPresentationOpen) reorderPresentation();
+        updatePresentationLive();
     }
 
     item.addEventListener('mousedown', startHold);
@@ -375,6 +374,7 @@ function updateLeaderboardLive() {
 function reorderLeaderboard() {
     const cards = [...memberList.children];
     if (cards.length === 0) return;
+
     const firstRects = new Map();
     cards.forEach(c => firstRects.set(c.dataset.name, c.getBoundingClientRect()));
 
@@ -456,12 +456,10 @@ function resetMember(n) {
     memberDurations[n] = 0;
     reloadMemberStrip();
     reloadMemberList();
-    if (_isPresentationOpen) { renderPresentationBars(); }
     showUndoToast(`↺ Reset ${n}`, () => {
         memberDurations[n] = prevDuration;
         reloadMemberStrip();
         reloadMemberList();
-        if (_isPresentationOpen) { renderPresentationBars(); }
         showToast(`↩ Undo reset ${n}`);
     });
 }
@@ -478,13 +476,13 @@ function confirmDeleteMember(n) {
 }
 
 function deleteMember(n) {
-    if (memberIntervals[n]) { clearInterval(memberIntervals[n]); delete memberIntervals[n]; }
-    delete memberDurations[n];
-    delete memberColors[n];
-    delete memberPhotos[n];
+    if (memberIntervals[n]) clearInterval(memberIntervals[n]);
+    memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== n));
+    memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== n));
+    memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== n));
+    memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== n));
     reloadMemberStrip();
     reloadMemberList();
-    if (_isPresentationOpen) { renderPresentationBars(); }
     showToast(`🗑 ${n} deleted`);
 }
 
@@ -503,7 +501,6 @@ function confirmResetAll() {
             });
             reloadMemberStrip();
             reloadMemberList();
-            if (_isPresentationOpen) { renderPresentationBars(); }
             showToast('↺ All durations reset');
         }
     });
@@ -558,10 +555,10 @@ async function applyEdit() {
             memberColors[newName]    = newColor;
             memberPhotos[newName]    = newPhoto;
             if (memberIntervals[oldName]) { memberIntervals[newName] = memberIntervals[oldName]; }
-            delete memberDurations[oldName];
-            delete memberColors[oldName];
-            delete memberPhotos[oldName];
-            if (memberIntervals[oldName]) delete memberIntervals[oldName];
+            memberDurations = Object.fromEntries(Object.entries(memberDurations).filter(([k]) => k !== oldName));
+            memberColors    = Object.fromEntries(Object.entries(memberColors).filter(([k]) => k !== oldName));
+            memberPhotos    = Object.fromEntries(Object.entries(memberPhotos).filter(([k]) => k !== oldName));
+            memberIntervals = Object.fromEntries(Object.entries(memberIntervals).filter(([k]) => k !== oldName));
         } else {
             memberColors[oldName] = newColor;
             memberPhotos[oldName] = newPhoto;
@@ -571,7 +568,6 @@ async function applyEdit() {
         closeEditModal();
         reloadMemberStrip();
         reloadMemberList();
-        if (_isPresentationOpen) { renderPresentationBars(); }
         showToast(`✅ ${newName} updated`);
     } catch(err) {
         console.error('applyEdit error:', err);
@@ -601,6 +597,7 @@ function saveNewPreset() {
     if (members.length === 0) { showToast('⚠️ Add a member first'); return; }
 
     const defaultName = document.getElementById('songTitle').value.trim();
+
     const bar = document.getElementById('presetSaveBar');
     const inp = document.getElementById('presetSaveInput');
     if (!bar || !inp) return;
@@ -659,7 +656,6 @@ function loadSelectedPreset() {
         savePhotoCache();
         reloadMemberStrip();
         reloadMemberList();
-        if (_isPresentationOpen) { renderPresentationBars(); }
         showToast(`✅ Preset "${name}" loaded`);
     };
 
@@ -987,11 +983,9 @@ document.addEventListener('keydown', e => {
         e.preventDefault();
         const vid = document.getElementById('localMedia');
         const aud = document.getElementById('audioPlayer');
-        if (vid.style.display !== 'none' && vid.src) { vid.paused ? vid.play() : vid.pause(); }
-        else if (aud.style.display !== 'none' && aud.src) { aud.paused ? aud.play() : aud.pause(); }
+        if (vid.style.display !== 'none') { vid.paused ? vid.play() : vid.pause(); }
+        else if (aud.style.display !== 'none') { aud.paused ? aud.play() : aud.pause(); }
         else if (window.ytPlayer) { window.ytPlayer.getPlayerState() === 1 ? window.ytPlayer.pauseVideo() : window.ytPlayer.playVideo(); }
-        // Sinkronkan ke presentation jika terbuka
-        if (_isPresentationOpen) syncMediaToPresentation();
         return;
     }
 
@@ -1035,10 +1029,28 @@ window.addEventListener('blur', () => {
 });
 
 // ══════════════════════════════════════════
-//  AD-LIBS (Q-P) — FIXED: posisi di kiri, glow hijau
+//  AD-LIBS (Q-P) — fix: tambah durasi & reorder
 // ══════════════════════════════════════════
 const AD_KEYS = 'QWERTYUIOP'.split('');
 const activeAdLibKeys = new Set();
+let adLibIntervals = {};
+
+function addAdLibTime(memberName, amount = 0.5) {
+    if (!memberDurations[memberName]) return;
+    memberDurations[memberName] = (memberDurations[memberName] || 0) + amount;
+
+    // Update UI
+    const timeLabel = document.getElementById(`strip-time-${CSS.escape(memberName)}`);
+    if (timeLabel) timeLabel.textContent = memberDurations[memberName].toFixed(1) + 's';
+    updateLeaderboardLive();
+    updateTotalDuration();
+    updatePresentationLive();
+    reorderLeaderboard();
+    // reorder presentation juga
+    if (document.getElementById('presentationOverlay').style.display !== 'none') {
+        renderPresentationBars(); // refresh penuh agar bar dan avatar update
+    }
+}
 
 function handleAdLibKeyDown(e) {
     const key = e.key.toUpperCase();
@@ -1048,8 +1060,20 @@ function handleAdLibKeyDown(e) {
     const items = document.querySelectorAll('.strip-item');
     const item = items[idx];
     if (!item) return;
+    const n = item.dataset.name;
+    if (!n) return;
+
     activeAdLibKeys.add(idx);
     startAdLib(idx, item);
+
+    // Tambah durasi sekali langsung
+    addAdLibTime(n, 0.5);
+
+    // Jika tombol ditahan, tambah setiap 200ms
+    if (adLibIntervals[idx]) clearInterval(adLibIntervals[idx]);
+    adLibIntervals[idx] = setInterval(() => {
+        addAdLibTime(n, 0.5);
+    }, 200);
 }
 
 function handleAdLibKeyUp(e) {
@@ -1058,16 +1082,16 @@ function handleAdLibKeyUp(e) {
     if (idx < 0) return;
     activeAdLibKeys.delete(idx);
     clearAdLib(idx);
+    if (adLibIntervals[idx]) {
+        clearInterval(adLibIntervals[idx]);
+        delete adLibIntervals[idx];
+    }
 }
 
 function startAdLib(idx, item) {
     item.classList.add('adlib-active');
     const wrap = item.querySelector('.strip-avatar-wrap');
-    if (wrap) {
-        wrap.classList.add('adlib-glow');
-        // Ubah warna glow menjadi hijau
-        wrap.style.setProperty('--adlib-glow-color', '#4ade80');
-    }
+    if (wrap) wrap.classList.add('adlib-glow');
     const n = item.dataset.name;
     const card = [...memberList.children].find(c => c.dataset.name === n);
     if (card) card.classList.add('adlib-card');
@@ -1079,10 +1103,7 @@ function clearAdLib(idx) {
     if (!item) return;
     item.classList.remove('adlib-active');
     const wrap = item.querySelector('.strip-avatar-wrap');
-    if (wrap) {
-        wrap.classList.remove('adlib-glow');
-        wrap.style.setProperty('--adlib-glow-color', '');
-    }
+    if (wrap) wrap.classList.remove('adlib-glow');
     const n = item.dataset.name;
     const card = [...memberList.children].find(c => c.dataset.name === n);
     if (card) card.classList.remove('adlib-card');
@@ -1094,13 +1115,11 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 });
 
 // ══════════════════════════════════════════
-//  9. MODE PRESENTASI — FIXED: reorder & bar real-time
+//  9. PRESENTATION MODE (fix reorder & avatar scale)
 // ══════════════════════════════════════════
 function openPresentation() {
     const names = Object.keys(memberDurations);
     if (names.length === 0) { showToast('⚠️ No members to present'); return; }
-
-    _isPresentationOpen = true;
 
     const pressVid = document.getElementById('pressVideo');
     const pressAud = document.getElementById('pressAudio');
@@ -1119,13 +1138,10 @@ function openPresentation() {
         pressVid.src = localVid.src;
         pressVid.currentTime = localVid.currentTime;
         pressVid.style.display = 'block';
-        // Sinkronkan play/pause
-        if (!localVid.paused) pressVid.play();
     } else if (localAud.style.display !== 'none' && localAud.src) {
         pressAud.src = localAud.src;
         pressAud.currentTime = localAud.currentTime;
         pressAud.style.display = 'block';
-        if (!localAud.paused) pressAud.play();
     } else if (window.ytPlayer) {
         pressYt.style.display = 'block';
         pressYt.innerHTML = '';
@@ -1144,34 +1160,27 @@ function openPresentation() {
 
     document.getElementById('presentationOverlay').style.display = 'flex';
     renderPresentationBars();
-
-    // Mulai sync interval untuk menjaga sinkronisasi video
-    if (_pressSyncInterval) clearInterval(_pressSyncInterval);
-    _pressSyncInterval = setInterval(syncMediaToPresentation, 500);
 }
 
 function closePresentation() {
-    _isPresentationOpen = false;
     document.getElementById('presentationOverlay').style.display = 'none';
     if (_pressReorderTimer) { clearTimeout(_pressReorderTimer); _pressReorderTimer = null; }
-    if (_pressSyncInterval) { clearInterval(_pressSyncInterval); _pressSyncInterval = null; }
-    // Hentikan semua interval presentasi
 }
 
-function syncMediaToPresentation() {
-    // Sinkronkan dari main ke presentation
+function syncPresentationMedia() {
     const localVid = document.getElementById('localMedia');
-    const localAud = document.getElementById('audioPlayer');
     const pressVid = document.getElementById('pressVideo');
+    const localAud = document.getElementById('audioPlayer');
     const pressAud = document.getElementById('pressAudio');
 
-    if (localVid.style.display !== 'none' && localVid.src && pressVid.style.display !== 'none') {
+    if (localVid.style.display !== 'none' && pressVid.style.display !== 'none') {
         pressVid.currentTime = localVid.currentTime;
-        if (localVid.paused) pressVid.pause(); else pressVid.play();
-    } else if (localAud.style.display !== 'none' && localAud.src && pressAud.style.display !== 'none') {
+        if (!localVid.paused) pressVid.play(); else pressVid.pause();
+    } else if (localAud.style.display !== 'none' && pressAud.style.display !== 'none') {
         pressAud.currentTime = localAud.currentTime;
-        if (localAud.paused) pressAud.pause(); else pressAud.play();
+        if (!localAud.paused) pressAud.play(); else pressAud.pause();
     }
+    showToast('⏱ Synced');
 }
 
 function pressId(prefix, name) {
@@ -1196,10 +1205,14 @@ function renderPresentationBars() {
         row.dataset.name = n;
         row.style.animationDelay = (i * 0.06) + 's';
         row.style.setProperty('--press-color', c);
+        // Tentukan status rekam
+        const isRecording = !!memberIntervals[n];
+        const avatarScale = isRecording ? 'scale(1.15)' : 'scale(1)';
+        const avatarShadow = isRecording ? `0 0 28px 8px ${c}99` : `0 0 14px 2px ${c}44`;
         row.innerHTML = `
             <img src="${memberPhotos[n]}" class="press-avatar"
                  id="${pressId('pavatar-',n)}"
-                 style="border-color:${c}; box-shadow:0 0 14px 2px ${c}55;"
+                 style="border-color:${c}; transform:${avatarScale}; box-shadow:${avatarShadow};"
                  onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random'">
             <div class="press-member-info">
                 <span class="press-name">${n}</span>
@@ -1227,7 +1240,7 @@ function updatePresentationLive() {
     const rows = [...container.children];
     const maxDur = Math.max(...Object.values(memberDurations), 0.001);
 
-    // Update bar & waktu
+    // Update bar, time, avatar scale
     rows.forEach(row => {
         const n   = row.dataset.name;
         const bar = row.querySelector('.press-bar');
@@ -1244,7 +1257,7 @@ function updatePresentationLive() {
         }
     });
 
-    // Reorder (sama dengan reorderLeaderboard)
+    // Reorder dengan FLIP, sama seperti non-present
     if (_pressReorderTimer || _pressIsReordering) return;
     _pressReorderTimer = setTimeout(() => {
         _pressReorderTimer = null;
@@ -1258,6 +1271,7 @@ function updatePresentationLive() {
         if (same) return;
 
         _pressIsReordering = true;
+
         const firstRects = new Map();
         curRows.forEach(r => firstRects.set(r.dataset.name, r.getBoundingClientRect()));
 
