@@ -275,26 +275,8 @@ function renderStripItem(n, c, p, index) {
         clearInterval(rippleInterval);
         rippleInterval = null;
         item.classList.remove('holding');
-        
-        // CARI KARTU MEMBER dan HAPUS is-active dengan transisi
-        var cards = document.querySelectorAll('.member-card');
-        var card = null;
-        for (var i = 0; i < cards.length; i++) {
-            if (cards[i].dataset.name === n) { card = cards[i]; break; }
-        }
-        if (card) {
-            // Hapus class is-active
-            card.classList.remove('is-active');
-            // Force reflow agar transisi berjalan
-            void card.offsetWidth;
-            // Reset transform avatar ke scale(1) dengan transisi smooth
-            var avatar = card.querySelector('.member-avatar');
-            if (avatar) {
-                avatar.style.transition = 'transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-                avatar.style.transform = 'scale(1)';
-                avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
-            }
-        }
+        // update leaderboard akan menghapus is-active dan mengembalikan avatar dengan animasi
+        updateLeaderboardLive();
         reorderLeaderboard();
         updatePresentationLive();
     }
@@ -327,7 +309,7 @@ function renderMemberCard(n, c, p, d) {
     card.style.borderLeftColor = c;
     card.style.setProperty('--pulse-color', c + '66');
     card.dataset.name = n;
-    card.innerHTML = '\n        <div class="member-card-inner">\n            <span class="rank-num">1</span>\n            <img src="' + p + '" class="member-avatar"\n                 style="border-color:' + c + '; box-shadow:0 0 10px 2px ' + c + '44; transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);"\n                 onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            <div class="member-text">\n                <div class="member-name-row">\n                    <span class="member-name">' + n + '</span>\n                    <div class="member-time-wrap">\n                        <span class="rec-dot"></span>\n                        <span class="member-time" id="time-' + CSS.escape(n) + '">' + d.toFixed(1) + 's</span>\n                    </div>\n                </div>\n                <div class="member-bar-wrap">\n                    <div class="member-bar" id="bar-' + CSS.escape(n) + '"\n                         style="background:linear-gradient(90deg,' + c + '88,' + c + '); transform:scaleX(0);"></div>\n                </div>\n            </div>\n            <div class="member-actions">\n                <button class="btn-sm" onclick="resetMember(\'' + n + '\')" title="Reset">↺</button>\n                <button class="btn-sm del" onclick="confirmDeleteMember(\'' + n + '\')" title="Delete">✕</button>\n            </div>\n        </div>';
+    card.innerHTML = '\n        <div class="member-card-inner">\n            <span class="rank-num">1</span>\n            <img src="' + p + '" class="member-avatar"\n                 style="border-color:' + c + '; box-shadow:0 0 10px 2px ' + c + '44; transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);"\n                 onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            <div class="member-text">\n                <div class="member-name-row">\n                    <span class="member-name">' + n + '</span>\n                    <div class="member-time-wrap">\n                        <span class="rec-dot"></span>\n                        <span class="member-time" id="time-' + CSS.escape(n) + '">' + d.toFixed(1) + 's</span>\n                    </div>\n                </div>\n                <div class="member-bar-wrap">\n                    <div class="member-bar" id="bar-' + CSS.escape(n) + '"\n                         style="background:linear-gradient(90deg,' + c + '88,' + c + '); transform:scaleX(0);"></div>\n                </div>\n            </div>\n            <div class="member-actions">\n                <button class="btn-sm" onclick="resetMember(\'' + n + '\')" title="Reset">↺</button>\n                <button class="btn-sm del" onclick="confirmDeleteMember(\'' + n + '\')" title="Delete">✕</button>\n            </div>\n        </div>';
     return card;
 }
 
@@ -388,12 +370,9 @@ function updateLeaderboardLive() {
         var n = card.dataset.name;
         var el = card.querySelector('.member-time');
         if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
-        
-        var isActive = !!memberIntervals[n];
         var avatar = card.querySelector('.member-avatar');
-        
+        var isActive = !!memberIntervals[n];
         if (isActive) {
-            // Saat HOLD: tambahkan class is-active dan perbesar avatar
             if (!card.classList.contains('is-active')) {
                 card.classList.add('is-active');
             }
@@ -403,20 +382,17 @@ function updateLeaderboardLive() {
                 avatar.style.boxShadow = '0 0 22px 6px ' + (memberColors[n] || '#a78bfa') + '66';
             }
         } else {
-            // Saat LEPAS: hapus is-active dan kembalikan avatar ke normal dengan transisi smooth
             if (card.classList.contains('is-active')) {
                 card.classList.remove('is-active');
-                // Force reflow
                 void card.offsetWidth;
             }
             if (avatar) {
-                // Transisi smooth seperti di mode present
-                avatar.style.transition = 'transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                // Sama persis dengan mode presentasi: transisi lambat dan bounce
+                avatar.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
                 avatar.style.transform = 'scale(1)';
                 avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
             }
         }
-        
         var bar = card.querySelector('.member-bar');
         if (bar) {
             var pct = (memberDurations[n] || 0) / _lastMaxDur;
@@ -478,7 +454,6 @@ function reorderLeaderboard() {
 function addNewMember() {
     var n = document.getElementById('memberName').value.trim();
     if (!n) { showToast('⚠️ Member name cannot be empty'); return; }
-    
     var names = Object.keys(memberDurations);
     for (var i = 0; i < names.length; i++) {
         if (names[i].toLowerCase() === n.toLowerCase()) {
@@ -486,10 +461,8 @@ function addNewMember() {
             return;
         }
     }
-    
     var color = document.getElementById('memberColor').value;
     var f = document.getElementById('memberPhoto').files[0];
-    
     if (f) {
         fileToBase64(f).then(function(url) {
             finalizeAddMember(n, color, url);
@@ -499,7 +472,6 @@ function addNewMember() {
         });
         return;
     }
-    
     var photoUrl = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random&color=fff';
     finalizeAddMember(n, color, photoUrl);
 }
@@ -508,7 +480,6 @@ function finalizeAddMember(n, color, photoUrl) {
     memberDurations[n] = 0;
     memberColors[n] = color;
     memberPhotos[n] = photoUrl;
-    
     document.getElementById('memberName').value = '';
     document.getElementById('memberPhoto').value = '';
     var photoLabel = document.getElementById('memberPhotoLabel');
@@ -609,7 +580,6 @@ function applyEdit() {
     var newPhotoFile = document.getElementById('editMemberPhoto').files[0];
     if (!oldName) { showToast('⚠️ Select a member first'); return; }
     if (!newName) { showToast('⚠️ Name cannot be empty'); return; }
-    
     if (newName !== oldName) {
         var names = Object.keys(memberDurations);
         for (var i = 0; i < names.length; i++) {
@@ -619,7 +589,6 @@ function applyEdit() {
             }
         }
     }
-    
     var newPhoto = memberPhotos[oldName] || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(oldName) + '&background=random';
     if (newPhotoFile) {
         fileToBase64(newPhotoFile).then(function(url) {
@@ -658,7 +627,7 @@ function applyEditFinal(oldName, newName, newColor, newPhoto) {
 // ══════════════════════════════════════════
 //  4. PRESET
 // ══════════════════════════════════════════
-function getPresets() { 
+function getPresets() {
     try {
         return JSON.parse(localStorage.getItem('linedistro_presets') || '{}');
     } catch (e) {
@@ -882,7 +851,7 @@ function closeResultModal() { document.getElementById('resultModal').style.displ
 // ══════════════════════════════════════════
 //  7. HISTORY
 // ══════════════════════════════════════════
-function getHistory() { 
+function getHistory() {
     try {
         return JSON.parse(localStorage.getItem('linedistro_history') || '[]');
     } catch (e) {
@@ -1084,7 +1053,7 @@ window.addEventListener('blur', function() {
 });
 
 // ══════════════════════════════════════════
-//  AD-LIBS (Q-P)
+//  AD-LIBS (Q-P) — sekarang interval 50ms, increment 0.05 detik (SAMA dengan hold)
 // ══════════════════════════════════════════
 var AD_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
 var activeAdLibKeys = new Set();
@@ -1118,11 +1087,11 @@ function handleAdLibKeyDown(e) {
     if (!n) return;
     activeAdLibKeys.add(idx);
     startAdLib(idx, item);
-    addAdLibTime(n, 0.05);
+    // Mulai interval 50ms, increment 0.05 detik — SAMA PERSIS dengan hold
     if (adLibIntervals[idx]) clearInterval(adLibIntervals[idx]);
     adLibIntervals[idx] = setInterval(function() {
         addAdLibTime(n, 0.05);
-    }, 200);
+    }, 50);
 }
 
 function handleAdLibKeyUp(e) {
