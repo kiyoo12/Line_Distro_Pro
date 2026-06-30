@@ -52,12 +52,16 @@ function savePhotoCache() {
 function loadPhotoCache() {
     var raw = localStorage.getItem('linedistro_photos');
     if (!raw) return;
-    var cached = JSON.parse(raw);
-    for (var n in cached) {
-        var url = cached[n];
-        if (url && url.indexOf('blob:') !== 0) {
-            memberPhotos[n] = url;
+    try {
+        var cached = JSON.parse(raw);
+        for (var n in cached) {
+            var url = cached[n];
+            if (url && url.indexOf('blob:') !== 0) {
+                memberPhotos[n] = url;
+            }
         }
+    } catch (e) {
+        console.warn('Failed to load photo cache', e);
     }
 }
 
@@ -420,23 +424,27 @@ function reorderLeaderboard() {
         if (Math.abs(dy) < 1) continue;
         card2.style.transition = 'transform 0s';
         card2.style.transform = 'translateY(' + dy + 'px)';
-        requestAnimationFrame(function() {
-            requestAnimationFrame(function() {
-                card2.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                card2.style.transform = '';
-                setTimeout(function() { card2.style.transition = '';
-                    card2.style.transform = ''; }, 600);
-            });
-        });
+        requestAnimationFrame(function(cardRef) {
+            return function() {
+                requestAnimationFrame(function() {
+                    cardRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                    cardRef.style.transform = '';
+                    setTimeout(function() { cardRef.style.transition = '';
+                        cardRef.style.transform = ''; }, 600);
+                });
+            };
+        }(card2));
     }
 }
 
 // ══════════════════════════════════════════
-//  2. TAMBAH & KELOLA MEMBER
+//  2. TAMBAH & KELOLA MEMBER (FIX: anti-duplikat)
 // ══════════════════════════════════════════
 function addNewMember() {
     var n = document.getElementById('memberName').value.trim();
     if (!n) { showToast('⚠️ Member name cannot be empty'); return; }
+    
+    // CEK DUPLIKAT — case insensitive
     var names = Object.keys(memberDurations);
     for (var i = 0; i < names.length; i++) {
         if (names[i].toLowerCase() === n.toLowerCase()) {
@@ -444,36 +452,29 @@ function addNewMember() {
             return;
         }
     }
+    
     var color = document.getElementById('memberColor').value;
     var f = document.getElementById('memberPhoto').files[0];
-    var photoUrl;
+    
     if (f) {
         fileToBase64(f).then(function(url) {
-            photoUrl = url;
-            memberDurations[n] = 0;
-            memberColors[n] = color;
-            memberPhotos[n] = photoUrl;
-            document.getElementById('memberName').value = '';
-            document.getElementById('memberPhoto').value = '';
-            var photoLabel = document.getElementById('memberPhotoLabel');
-            if (photoLabel) {
-                var span = photoLabel.querySelector('.file-label-text');
-                if (span) span.textContent = '🖼 Foto';
-            }
-            savePhotoCache();
-            reloadMemberStrip();
-            reloadMemberList();
-            showToast('✅ ' + n + ' added');
+            finalizeAddMember(n, color, url);
         }).catch(function(err) {
             console.error(err);
             showToast('❌ Failed to load photo');
         });
         return;
     }
-    photoUrl = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random&color=fff';
+    
+    var photoUrl = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random&color=fff';
+    finalizeAddMember(n, color, photoUrl);
+}
+
+function finalizeAddMember(n, color, photoUrl) {
     memberDurations[n] = 0;
     memberColors[n] = color;
     memberPhotos[n] = photoUrl;
+    
     document.getElementById('memberName').value = '';
     document.getElementById('memberPhoto').value = '';
     var photoLabel = document.getElementById('memberPhotoLabel');
@@ -512,6 +513,7 @@ function deleteMember(n) {
     delete memberColors[n];
     delete memberPhotos[n];
     delete memberIntervals[n];
+    savePhotoCache();
     reloadMemberStrip();
     reloadMemberList();
     showToast('🗑 ' + n + ' deleted');
@@ -573,6 +575,18 @@ function applyEdit() {
     var newPhotoFile = document.getElementById('editMemberPhoto').files[0];
     if (!oldName) { showToast('⚠️ Select a member first'); return; }
     if (!newName) { showToast('⚠️ Name cannot be empty'); return; }
+    
+    // Cek duplikat nama baru (kecuali nama sama)
+    if (newName !== oldName) {
+        var names = Object.keys(memberDurations);
+        for (var i = 0; i < names.length; i++) {
+            if (names[i].toLowerCase() === newName.toLowerCase()) {
+                showToast('⚠️ Member "' + newName + '" already exists');
+                return;
+            }
+        }
+    }
+    
     var newPhoto = memberPhotos[oldName] || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(oldName) + '&background=random';
     if (newPhotoFile) {
         fileToBase64(newPhotoFile).then(function(url) {
@@ -611,7 +625,13 @@ function applyEditFinal(oldName, newName, newColor, newPhoto) {
 // ══════════════════════════════════════════
 //  4. PRESET
 // ══════════════════════════════════════════
-function getPresets() { return JSON.parse(localStorage.getItem('linedistro_presets') || '{}'); }
+function getPresets() { 
+    try {
+        return JSON.parse(localStorage.getItem('linedistro_presets') || '{}');
+    } catch (e) {
+        return {};
+    }
+}
 
 function savePresets(d) { localStorage.setItem('linedistro_presets', JSON.stringify(d)); }
 
@@ -682,6 +702,7 @@ function loadSelectedPreset() {
     if (!preset) return;
 
     function doLoad() {
+        // RESET TOTAL dulu
         memberDurations = {};
         memberColors = {};
         memberPhotos = {};
@@ -829,7 +850,13 @@ function closeResultModal() { document.getElementById('resultModal').style.displ
 // ══════════════════════════════════════════
 //  7. HISTORY
 // ══════════════════════════════════════════
-function getHistory() { return JSON.parse(localStorage.getItem('linedistro_history') || '[]'); }
+function getHistory() { 
+    try {
+        return JSON.parse(localStorage.getItem('linedistro_history') || '[]');
+    } catch (e) {
+        return [];
+    }
+}
 
 function saveHistory(d) { localStorage.setItem('linedistro_history', JSON.stringify(d)); }
 
@@ -1334,14 +1361,16 @@ function updatePresentationLive() {
                     if (Math.abs(dy) < 1) continue;
                     row2.style.transition = 'transform 0s';
                     row2.style.transform = 'translateY(' + dy + 'px)';
-                    requestAnimationFrame(function() {
-                        requestAnimationFrame(function() {
-                            row2.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                            row2.style.transform = '';
-                            setTimeout(function() { row2.style.transition = '';
-                                row2.style.transform = ''; }, 600);
-                        });
-                    });
+                    requestAnimationFrame(function(rowRef) {
+                        return function() {
+                            requestAnimationFrame(function() {
+                                rowRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                                rowRef.style.transform = '';
+                                setTimeout(function() { rowRef.style.transition = '';
+                                    rowRef.style.transform = ''; }, 600);
+                            });
+                        };
+                    }(row2));
                 }
                 setTimeout(function() { _pressIsReordering = false; }, 600);
             });
