@@ -275,7 +275,6 @@ function renderStripItem(n, c, p, index) {
         clearInterval(rippleInterval);
         rippleInterval = null;
         item.classList.remove('holding');
-        // update leaderboard akan menghapus is-active dan mengembalikan avatar dengan animasi
         updateLeaderboardLive();
         reorderLeaderboard();
         updatePresentationLive();
@@ -309,7 +308,7 @@ function renderMemberCard(n, c, p, d) {
     card.style.borderLeftColor = c;
     card.style.setProperty('--pulse-color', c + '66');
     card.dataset.name = n;
-    card.innerHTML = '\n        <div class="member-card-inner">\n            <span class="rank-num">1</span>\n            <img src="' + p + '" class="member-avatar"\n                 style="border-color:' + c + '; box-shadow:0 0 10px 2px ' + c + '44; transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);"\n                 onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            <div class="member-text">\n                <div class="member-name-row">\n                    <span class="member-name">' + n + '</span>\n                    <div class="member-time-wrap">\n                        <span class="rec-dot"></span>\n                        <span class="member-time" id="time-' + CSS.escape(n) + '">' + d.toFixed(1) + 's</span>\n                    </div>\n                </div>\n                <div class="member-bar-wrap">\n                    <div class="member-bar" id="bar-' + CSS.escape(n) + '"\n                         style="background:linear-gradient(90deg,' + c + '88,' + c + '); transform:scaleX(0);"></div>\n                </div>\n            </div>\n            <div class="member-actions">\n                <button class="btn-sm" onclick="resetMember(\'' + n + '\')" title="Reset">↺</button>\n                <button class="btn-sm del" onclick="confirmDeleteMember(\'' + n + '\')" title="Delete">✕</button>\n            </div>\n        </div>';
+    card.innerHTML = '\n        <div class="member-card-inner">\n            <span class="rank-num">1</span>\n            <img src="' + p + '" class="member-avatar"\n                 style="border-color:' + c + '; box-shadow:0 0 10px 2px ' + c + '44; transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);"\n                 onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            <div class="member-text">\n                <div class="member-name-row">\n                    <span class="member-name">' + n + '</span>\n                    <div class="member-time-wrap">\n                        <span class="rec-dot" style="margin-right:4px;"></span>\n                        <span class="member-time" id="time-' + CSS.escape(n) + '">' + d.toFixed(1) + 's</span>\n                    </div>\n                </div>\n                <div class="member-bar-wrap">\n                    <div class="member-bar" id="bar-' + CSS.escape(n) + '"\n                         style="background:linear-gradient(90deg,' + c + '88,' + c + '); transform:scaleX(0);"></div>\n                </div>\n            </div>\n            <div class="member-actions">\n                <button class="btn-sm" onclick="resetMember(\'' + n + '\')" title="Reset">↺</button>\n                <button class="btn-sm del" onclick="confirmDeleteMember(\'' + n + '\')" title="Delete">✕</button>\n            </div>\n        </div>';
     return card;
 }
 
@@ -352,19 +351,24 @@ function applyRankStyles() {
     }
 }
 
-var _lastMaxDur = 0.001;
-var _maxDurTick = 0;
+// ══════════════════════════════════════════
+//  UPDATE LEADERBOARD — dengan _maxDurEver agar bar tidak mundur
+// ══════════════════════════════════════════
+var _maxDurEver = 0.001;
+var _avatarState = {};
 
 function updateLeaderboardLive() {
     var all = document.querySelectorAll('.member-card');
-    if (Date.now() - _maxDurTick > 500) {
-        _lastMaxDur = 0.001;
-        for (var i = 0; i < all.length; i++) {
-            var val = memberDurations[all[i].dataset.name] || 0;
-            if (val > _lastMaxDur) _lastMaxDur = val;
-        }
-        _maxDurTick = Date.now();
+    var currentMax = 0;
+    for (var i = 0; i < all.length; i++) {
+        var val = memberDurations[all[i].dataset.name] || 0;
+        if (val > currentMax) currentMax = val;
     }
+    if (currentMax > _maxDurEver) {
+        _maxDurEver = currentMax;
+    }
+    if (_maxDurEver < 0.001) _maxDurEver = 0.001;
+
     for (var j = 0; j < all.length; j++) {
         var card = all[j];
         var n = card.dataset.name;
@@ -372,6 +376,7 @@ function updateLeaderboardLive() {
         if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
         var avatar = card.querySelector('.member-avatar');
         var isActive = !!memberIntervals[n];
+
         if (isActive) {
             if (!card.classList.contains('is-active')) {
                 card.classList.add('is-active');
@@ -380,6 +385,7 @@ function updateLeaderboardLive() {
                 avatar.style.transition = 'transform 0.15s ease-out, box-shadow 0.15s ease-out';
                 avatar.style.transform = 'scale(1.18)';
                 avatar.style.boxShadow = '0 0 22px 6px ' + (memberColors[n] || '#a78bfa') + '66';
+                _avatarState[n] = 'active';
             }
         } else {
             if (card.classList.contains('is-active')) {
@@ -387,15 +393,17 @@ function updateLeaderboardLive() {
                 void card.offsetWidth;
             }
             if (avatar) {
-                // Sama persis dengan mode presentasi: transisi lambat dan bounce
-                avatar.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-                avatar.style.transform = 'scale(1)';
-                avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
+                if (_avatarState[n] !== 'inactive') {
+                    avatar.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                    avatar.style.transform = 'scale(1)';
+                    avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
+                    _avatarState[n] = 'inactive';
+                }
             }
         }
         var bar = card.querySelector('.member-bar');
         if (bar) {
-            var pct = (memberDurations[n] || 0) / _lastMaxDur;
+            var pct = (memberDurations[n] || 0) / _maxDurEver;
             if (pct > 1) pct = 1;
             bar.style.transform = 'scaleX(' + pct + ')';
         }
@@ -1053,7 +1061,7 @@ window.addEventListener('blur', function() {
 });
 
 // ══════════════════════════════════════════
-//  AD-LIBS (Q-P) — sekarang interval 50ms, increment 0.05 detik (SAMA dengan hold)
+//  AD-LIBS (Q-P) — interval 50ms, increment 0.05
 // ══════════════════════════════════════════
 var AD_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
 var activeAdLibKeys = new Set();
@@ -1087,7 +1095,6 @@ function handleAdLibKeyDown(e) {
     if (!n) return;
     activeAdLibKeys.add(idx);
     startAdLib(idx, item);
-    // Mulai interval 50ms, increment 0.05 detik — SAMA PERSIS dengan hold
     if (adLibIntervals[idx]) clearInterval(adLibIntervals[idx]);
     adLibIntervals[idx] = setInterval(function() {
         addAdLibTime(n, 0.05);
