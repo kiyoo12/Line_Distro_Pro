@@ -258,7 +258,6 @@ function renderStripItem(n, c, p, index) {
             var elapsed = (Date.now() - startTime) / 1000;
             memberDurations[n] = startDuration + elapsed;
             timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
-            // Minta update visual di frame berikutnya
             requestAnimationFrame(function() {
                 updateLeaderboardLive();
                 updateTotalDuration();
@@ -329,6 +328,8 @@ function reloadMemberList() {
     }
     applyRankStyles();
     refreshEditDropdown();
+    // Update max durasi untuk bar
+    updateLeaderboardLive();
 }
 
 function applyRankStyles() {
@@ -357,9 +358,8 @@ function applyRankStyles() {
 }
 
 // ══════════════════════════════════════════
-//  UPDATE LEADERBOARD — dengan _maxDurEver agar bar tidak mundur
+//  UPDATE LEADERBOARD — pakai durasi tertinggi saat ini
 // ══════════════════════════════════════════
-var _maxDurEver = 0.001;
 var _avatarState = {};
 var _updatePending = false;
 
@@ -374,10 +374,7 @@ function updateLeaderboardLive() {
             var val = memberDurations[all[i].dataset.name] || 0;
             if (val > currentMax) currentMax = val;
         }
-        if (currentMax > _maxDurEver) {
-            _maxDurEver = currentMax;
-        }
-        if (_maxDurEver < 0.001) _maxDurEver = 0.001;
+        if (currentMax < 0.001) currentMax = 0.001;
 
         for (var j = 0; j < all.length; j++) {
             var card = all[j];
@@ -413,7 +410,7 @@ function updateLeaderboardLive() {
             }
             var bar = card.querySelector('.member-bar');
             if (bar) {
-                var pct = (memberDurations[n] || 0) / _maxDurEver;
+                var pct = (memberDurations[n] || 0) / currentMax;
                 if (pct > 1) pct = 1;
                 bar.style.transform = 'scaleX(' + pct + ')';
             }
@@ -553,7 +550,6 @@ function confirmResetAll() {
                     memberIntervals[n] = null; }
                 memberDurations[n] = 0;
             }
-            // Jangan reset _maxDurEver — biarkan tetap agar bar tidak turun
             reloadMemberStrip();
             reloadMemberList();
             showToast('↺ All durations reset');
@@ -733,8 +729,6 @@ function loadSelectedPreset() {
             memberColors[m.name] = m.color || '#a78bfa';
             memberPhotos[m.name] = m.photo || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(m.name) + '&background=random';
         }
-        // Reset _maxDurEver agar proporsional dengan preset baru
-        _maxDurEver = 0.001;
         savePhotoCache();
         reloadMemberStrip();
         reloadMemberList();
