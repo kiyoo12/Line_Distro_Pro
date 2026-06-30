@@ -258,9 +258,12 @@ function renderStripItem(n, c, p, index) {
             var elapsed = (Date.now() - startTime) / 1000;
             memberDurations[n] = startDuration + elapsed;
             timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
-            updateLeaderboardLive();
-            updateTotalDuration();
-            updatePresentationLive();
+            // Minta update visual di frame berikutnya
+            requestAnimationFrame(function() {
+                updateLeaderboardLive();
+                updateTotalDuration();
+                updatePresentationLive();
+            });
             if (Date.now() - lastReorder > 600) {
                 lastReorder = Date.now();
                 requestAnimationFrame(function() { reorderLeaderboard(); });
@@ -275,9 +278,11 @@ function renderStripItem(n, c, p, index) {
         clearInterval(rippleInterval);
         rippleInterval = null;
         item.classList.remove('holding');
-        updateLeaderboardLive();
-        reorderLeaderboard();
-        updatePresentationLive();
+        requestAnimationFrame(function() {
+            updateLeaderboardLive();
+            reorderLeaderboard();
+            updatePresentationLive();
+        });
     }
 
     item.addEventListener('mousedown', startHold);
@@ -308,7 +313,7 @@ function renderMemberCard(n, c, p, d) {
     card.style.borderLeftColor = c;
     card.style.setProperty('--pulse-color', c + '66');
     card.dataset.name = n;
-    card.innerHTML = '\n        <div class="member-card-inner">\n            <span class="rank-num">1</span>\n            <img src="' + p + '" class="member-avatar"\n                 style="border-color:' + c + '; box-shadow:0 0 10px 2px ' + c + '44; transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);"\n                 onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            <div class="member-text">\n                <div class="member-name-row">\n                    <span class="member-name">' + n + '</span>\n                    <div class="member-time-wrap">\n                        <span class="rec-dot" style="margin-right:4px;"></span>\n                        <span class="member-time" id="time-' + CSS.escape(n) + '">' + d.toFixed(1) + 's</span>\n                    </div>\n                </div>\n                <div class="member-bar-wrap">\n                    <div class="member-bar" id="bar-' + CSS.escape(n) + '"\n                         style="background:linear-gradient(90deg,' + c + '88,' + c + '); transform:scaleX(0);"></div>\n                </div>\n            </div>\n            <div class="member-actions">\n                <button class="btn-sm" onclick="resetMember(\'' + n + '\')" title="Reset">↺</button>\n                <button class="btn-sm del" onclick="confirmDeleteMember(\'' + n + '\')" title="Delete">✕</button>\n            </div>\n        </div>';
+    card.innerHTML = '\n        <div class="member-card-inner">\n            <span class="rank-num">1</span>\n            <img src="' + p + '" class="member-avatar"\n                 style="border-color:' + c + '; box-shadow:0 0 10px 2px ' + c + '44; transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);"\n                 onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            <div class="member-text">\n                <div class="member-name-row">\n                    <span class="member-name">' + n + '</span>\n                    <div class="member-time-wrap">\n                        <span class="rec-dot" style="margin-right:4px;"></span>\n                        <span class="member-time" id="time-' + CSS.escape(n) + '">' + d.toFixed(1) + 's</span>\n                    </div>\n                </div>\n                <div class="member-bar-wrap">\n                    <div class="member-bar" id="bar-' + CSS.escape(n) + '"\n                         style="background:linear-gradient(90deg,' + c + '88,' + c + '); transform:scaleX(0); transition: transform 0.15s linear;"></div>\n                </div>\n            </div>\n            <div class="member-actions">\n                <button class="btn-sm" onclick="resetMember(\'' + n + '\')" title="Reset">↺</button>\n                <button class="btn-sm del" onclick="confirmDeleteMember(\'' + n + '\')" title="Delete">✕</button>\n            </div>\n        </div>';
     return card;
 }
 
@@ -356,58 +361,64 @@ function applyRankStyles() {
 // ══════════════════════════════════════════
 var _maxDurEver = 0.001;
 var _avatarState = {};
+var _updatePending = false;
 
 function updateLeaderboardLive() {
-    var all = document.querySelectorAll('.member-card');
-    var currentMax = 0;
-    for (var i = 0; i < all.length; i++) {
-        var val = memberDurations[all[i].dataset.name] || 0;
-        if (val > currentMax) currentMax = val;
-    }
-    if (currentMax > _maxDurEver) {
-        _maxDurEver = currentMax;
-    }
-    if (_maxDurEver < 0.001) _maxDurEver = 0.001;
+    if (_updatePending) return;
+    _updatePending = true;
+    requestAnimationFrame(function() {
+        _updatePending = false;
+        var all = document.querySelectorAll('.member-card');
+        var currentMax = 0;
+        for (var i = 0; i < all.length; i++) {
+            var val = memberDurations[all[i].dataset.name] || 0;
+            if (val > currentMax) currentMax = val;
+        }
+        if (currentMax > _maxDurEver) {
+            _maxDurEver = currentMax;
+        }
+        if (_maxDurEver < 0.001) _maxDurEver = 0.001;
 
-    for (var j = 0; j < all.length; j++) {
-        var card = all[j];
-        var n = card.dataset.name;
-        var el = card.querySelector('.member-time');
-        if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
-        var avatar = card.querySelector('.member-avatar');
-        var isActive = !!memberIntervals[n];
+        for (var j = 0; j < all.length; j++) {
+            var card = all[j];
+            var n = card.dataset.name;
+            var el = card.querySelector('.member-time');
+            if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
+            var avatar = card.querySelector('.member-avatar');
+            var isActive = !!memberIntervals[n];
 
-        if (isActive) {
-            if (!card.classList.contains('is-active')) {
-                card.classList.add('is-active');
-            }
-            if (avatar) {
-                avatar.style.transition = 'transform 0.15s ease-out, box-shadow 0.15s ease-out';
-                avatar.style.transform = 'scale(1.18)';
-                avatar.style.boxShadow = '0 0 22px 6px ' + (memberColors[n] || '#a78bfa') + '66';
-                _avatarState[n] = 'active';
-            }
-        } else {
-            if (card.classList.contains('is-active')) {
-                card.classList.remove('is-active');
-                void card.offsetWidth;
-            }
-            if (avatar) {
-                if (_avatarState[n] !== 'inactive') {
-                    avatar.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-                    avatar.style.transform = 'scale(1)';
-                    avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
-                    _avatarState[n] = 'inactive';
+            if (isActive) {
+                if (!card.classList.contains('is-active')) {
+                    card.classList.add('is-active');
+                }
+                if (avatar) {
+                    avatar.style.transition = 'transform 0.15s ease-out, box-shadow 0.15s ease-out';
+                    avatar.style.transform = 'scale(1.18)';
+                    avatar.style.boxShadow = '0 0 22px 6px ' + (memberColors[n] || '#a78bfa') + '66';
+                    _avatarState[n] = 'active';
+                }
+            } else {
+                if (card.classList.contains('is-active')) {
+                    card.classList.remove('is-active');
+                    void card.offsetWidth;
+                }
+                if (avatar) {
+                    if (_avatarState[n] !== 'inactive') {
+                        avatar.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                        avatar.style.transform = 'scale(1)';
+                        avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
+                        _avatarState[n] = 'inactive';
+                    }
                 }
             }
+            var bar = card.querySelector('.member-bar');
+            if (bar) {
+                var pct = (memberDurations[n] || 0) / _maxDurEver;
+                if (pct > 1) pct = 1;
+                bar.style.transform = 'scaleX(' + pct + ')';
+            }
         }
-        var bar = card.querySelector('.member-bar');
-        if (bar) {
-            var pct = (memberDurations[n] || 0) / _maxDurEver;
-            if (pct > 1) pct = 1;
-            bar.style.transform = 'scaleX(' + pct + ')';
-        }
-    }
+    });
 }
 
 function reorderLeaderboard() {
@@ -542,6 +553,7 @@ function confirmResetAll() {
                     memberIntervals[n] = null; }
                 memberDurations[n] = 0;
             }
+            // Jangan reset _maxDurEver — biarkan tetap agar bar tidak turun
             reloadMemberStrip();
             reloadMemberList();
             showToast('↺ All durations reset');
@@ -721,6 +733,8 @@ function loadSelectedPreset() {
             memberColors[m.name] = m.color || '#a78bfa';
             memberPhotos[m.name] = m.photo || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(m.name) + '&background=random';
         }
+        // Reset _maxDurEver agar proporsional dengan preset baru
+        _maxDurEver = 0.001;
         savePhotoCache();
         reloadMemberStrip();
         reloadMemberList();
@@ -1073,14 +1087,16 @@ function addAdLibTime(memberName, amount) {
     memberDurations[memberName] = (memberDurations[memberName] || 0) + amount;
     var timeLabel = document.getElementById('strip-time-' + CSS.escape(memberName));
     if (timeLabel) timeLabel.textContent = memberDurations[memberName].toFixed(1) + 's';
-    updateLeaderboardLive();
-    updateTotalDuration();
-    updatePresentationLive();
-    reorderLeaderboard();
-    var overlay = document.getElementById('presentationOverlay');
-    if (overlay.style.display !== 'none') {
-        renderPresentationBars();
-    }
+    requestAnimationFrame(function() {
+        updateLeaderboardLive();
+        updateTotalDuration();
+        updatePresentationLive();
+        reorderLeaderboard();
+        var overlay = document.getElementById('presentationOverlay');
+        if (overlay.style.display !== 'none') {
+            renderPresentationBars();
+        }
+    });
 }
 
 function handleAdLibKeyDown(e) {
