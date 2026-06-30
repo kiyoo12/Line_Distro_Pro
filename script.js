@@ -328,8 +328,8 @@ function reloadMemberList() {
     }
     applyRankStyles();
     refreshEditDropdown();
-    // Update max durasi untuk bar
-    updateLeaderboardLive();
+    // Update max durasi
+    updateMaxDurEver();
 }
 
 function applyRankStyles() {
@@ -347,21 +347,28 @@ function applyRankStyles() {
         if (j === 2) card.classList.add('rank-3');
         var rankEl = card.querySelector('.rank-num');
         if (rankEl) rankEl.textContent = (j + 1);
-        var n = card.dataset.name;
-        var bar = card.querySelector('.member-bar');
-        if (bar) {
-            var pct = (memberDurations[n] || 0) / maxDur;
-            if (pct > 1) pct = 1;
-            bar.style.transform = 'scaleX(' + pct + ')';
-        }
     }
 }
 
 // ══════════════════════════════════════════
-//  UPDATE LEADERBOARD — pakai durasi tertinggi saat ini
+//  UPDATE LEADERBOARD — pakai _maxDurEver agar bar tidak turun
 // ══════════════════════════════════════════
+var _maxDurEver = 0.001;
 var _avatarState = {};
 var _updatePending = false;
+
+function updateMaxDurEver() {
+    var all = document.querySelectorAll('.member-card');
+    var currentMax = 0;
+    for (var i = 0; i < all.length; i++) {
+        var val = memberDurations[all[i].dataset.name] || 0;
+        if (val > currentMax) currentMax = val;
+    }
+    if (currentMax > _maxDurEver) {
+        _maxDurEver = currentMax;
+    }
+    if (_maxDurEver < 0.001) _maxDurEver = 0.001;
+}
 
 function updateLeaderboardLive() {
     if (_updatePending) return;
@@ -369,12 +376,16 @@ function updateLeaderboardLive() {
     requestAnimationFrame(function() {
         _updatePending = false;
         var all = document.querySelectorAll('.member-card');
+        // Update _maxDurEver jika ada durasi yang lebih tinggi
         var currentMax = 0;
         for (var i = 0; i < all.length; i++) {
             var val = memberDurations[all[i].dataset.name] || 0;
             if (val > currentMax) currentMax = val;
         }
-        if (currentMax < 0.001) currentMax = 0.001;
+        if (currentMax > _maxDurEver) {
+            _maxDurEver = currentMax;
+        }
+        if (_maxDurEver < 0.001) _maxDurEver = 0.001;
 
         for (var j = 0; j < all.length; j++) {
             var card = all[j];
@@ -410,7 +421,7 @@ function updateLeaderboardLive() {
             }
             var bar = card.querySelector('.member-bar');
             if (bar) {
-                var pct = (memberDurations[n] || 0) / currentMax;
+                var pct = (memberDurations[n] || 0) / _maxDurEver;
                 if (pct > 1) pct = 1;
                 bar.style.transform = 'scaleX(' + pct + ')';
             }
@@ -506,6 +517,8 @@ function finalizeAddMember(n, color, photoUrl) {
     savePhotoCache();
     reloadMemberStrip();
     reloadMemberList();
+    // update _maxDurEver
+    updateMaxDurEver();
     showToast('✅ ' + n + ' added');
 }
 
@@ -516,10 +529,12 @@ function resetMember(n) {
     memberDurations[n] = 0;
     reloadMemberStrip();
     reloadMemberList();
+    updateMaxDurEver();
     showUndoToast('↺ Reset ' + n, function() {
         memberDurations[n] = prev;
         reloadMemberStrip();
         reloadMemberList();
+        updateMaxDurEver();
         showToast('↩ Undo reset ' + n);
     });
 }
@@ -537,6 +552,7 @@ function deleteMember(n) {
     savePhotoCache();
     reloadMemberStrip();
     reloadMemberList();
+    updateMaxDurEver();
     showToast('🗑 ' + n + ' deleted');
 }
 
@@ -550,6 +566,8 @@ function confirmResetAll() {
                     memberIntervals[n] = null; }
                 memberDurations[n] = 0;
             }
+            // Reset _maxDurEver ke 0.001 agar bar mulai dari 0
+            _maxDurEver = 0.001;
             reloadMemberStrip();
             reloadMemberList();
             showToast('↺ All durations reset');
@@ -637,6 +655,7 @@ function applyEditFinal(oldName, newName, newColor, newPhoto) {
     closeEditModal();
     reloadMemberStrip();
     reloadMemberList();
+    updateMaxDurEver();
     showToast('✅ ' + newName + ' updated');
 }
 
@@ -729,6 +748,8 @@ function loadSelectedPreset() {
             memberColors[m.name] = m.color || '#a78bfa';
             memberPhotos[m.name] = m.photo || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(m.name) + '&background=random';
         }
+        // Reset _maxDurEver agar proporsional dengan preset baru
+        _maxDurEver = 0.001;
         savePhotoCache();
         reloadMemberStrip();
         reloadMemberList();
