@@ -1,6 +1,6 @@
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  TOTAL DURASI LIVE
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function updateTotalDuration() {
     const el = document.getElementById('totalDurationDisplay');
     if (!el) return;
@@ -8,33 +8,36 @@ function updateTotalDuration() {
     el.textContent = `Total: ${total.toFixed(1)}s`;
 }
 
-// ══════════════════════════════════════════
-//  PHOTO HELPER
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  PHOTO HELPER — compress + resize base64
+// ═══════════════════════════════════════════════════
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         const objectUrl = URL.createObjectURL(file);
         img.onload = () => {
             const MAX = 256;
-            let w = img.width, h = img.height;
-            if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
-            else { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
+            let w = img.width,
+                h = img.height;
+            if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w);
+                    w = MAX; } } else { if (h > MAX) { w = Math.round(w * MAX / h);
+                    h = MAX; } }
             const canvas = document.createElement('canvas');
-            canvas.width = w; canvas.height = h;
+            canvas.width = w;
+            canvas.height = h;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
             URL.revokeObjectURL(objectUrl);
             resolve(canvas.toDataURL('image/jpeg', 0.82));
         };
-        img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Gagal memuat gambar')); };
+        img.onerror = () => { URL.revokeObjectURL(objectUrl);
+            reject(new Error('Gagal memuat gambar')); };
         img.src = objectUrl;
     });
 }
 
-function savePhotoCache() {
-    localStorage.setItem('linedistro_photos', JSON.stringify(memberPhotos));
-}
+function savePhotoCache() { localStorage.setItem('linedistro_photos', JSON.stringify(memberPhotos)); }
+
 function loadPhotoCache() {
     const raw = localStorage.getItem('linedistro_photos');
     if (!raw) return;
@@ -48,7 +51,7 @@ function showFileName(input, labelId, defaultText) {
     const label = document.getElementById(labelId);
     if (!label) return;
     const file = input.files[0];
-    const text = file ? `📄 ${file.name.length > 24 ? file.name.substring(0,22)+'…' : file.name}` : defaultText;
+    const text = file ? `📄 ${file.name.length > 24 ? file.name.substring(0, 22) + '…' : file.name}` : defaultText;
     let span = label.querySelector('.file-label-text');
     if (!span) {
         span = document.createElement('span');
@@ -60,22 +63,28 @@ function showFileName(input, labelId, defaultText) {
     span.textContent = text;
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  STATE
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 const memberList = document.getElementById('memberList');
-let memberDurations = {}, memberColors = {}, memberPhotos = {};
+let memberDurations = {},
+    memberColors = {},
+    memberPhotos = {};
 let memberIntervals = {};
 let chartInstance = null;
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  TOAST & CONFIRM & PROMPT
-// ══════════════════════════════════════════
-let _undoTimer = null, _undoCallback = null;
+// ═══════════════════════════════════════════════════
+let _undoTimer = null,
+    _undoCallback = null;
+
 function showUndoToast(msg, onUndo, duration = 3000) {
     const t = document.getElementById('toast');
     t.innerHTML = `<span>${msg}</span><button class="toast-undo-btn" onclick="triggerUndo()">Undo</button>`;
-    t.style.display = 'flex'; t.style.alignItems = 'center'; t.style.gap = '12px';
+    t.style.display = 'flex';
+    t.style.alignItems = 'center';
+    t.style.gap = '12px';
     requestAnimationFrame(() => t.classList.add('show'));
     clearTimeout(t._timer);
     if (_undoTimer) clearTimeout(_undoTimer);
@@ -83,18 +92,22 @@ function showUndoToast(msg, onUndo, duration = 3000) {
     _undoTimer = setTimeout(() => {
         _undoCallback = null;
         t.classList.remove('show');
-        setTimeout(() => { t.style.display = 'none'; t.innerHTML = ''; }, 300);
+        setTimeout(() => { t.style.display = 'none';
+            t.innerHTML = ''; }, 300);
     }, duration);
 }
+
 function triggerUndo() {
     clearTimeout(_undoTimer);
     const cb = _undoCallback;
     _undoCallback = null;
     const t = document.getElementById('toast');
     t.classList.remove('show');
-    setTimeout(() => { t.style.display = 'none'; t.innerHTML = ''; }, 300);
+    setTimeout(() => { t.style.display = 'none';
+        t.innerHTML = ''; }, 300);
     if (cb) cb();
 }
+
 function showToast(msg, duration = 2800) {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -108,6 +121,7 @@ function showToast(msg, duration = 2800) {
 }
 
 let _confirmCallback = null;
+
 function showConfirm({ icon = '⚠️', title = 'Konfirmasi', msg = '', okLabel = 'Ya', okClass = 'btn-danger', onOk }) {
     document.getElementById('confirmIcon').textContent = icon;
     document.getElementById('confirmTitle').textContent = title;
@@ -118,10 +132,12 @@ function showConfirm({ icon = '⚠️', title = 'Konfirmasi', msg = '', okLabel 
     _confirmCallback = onOk;
     document.getElementById('confirmModal').style.display = 'flex';
 }
+
 function closeConfirm() {
     document.getElementById('confirmModal').style.display = 'none';
     _confirmCallback = null;
 }
+
 function confirmOk() {
     document.getElementById('confirmModal').style.display = 'none';
     if (_confirmCallback) _confirmCallback();
@@ -130,6 +146,7 @@ function confirmOk() {
 document.getElementById('confirmOkBtn').addEventListener('click', confirmOk);
 
 let _promptCallback = null;
+
 function showPrompt({ icon = '✏️', title = '', sub = '', placeholder = '', onOk }) {
     document.getElementById('promptTitle').textContent = title;
     document.getElementById('promptSub').textContent = sub;
@@ -140,10 +157,12 @@ function showPrompt({ icon = '✏️', title = '', sub = '', placeholder = '', o
     document.getElementById('promptModal').style.display = 'flex';
     setTimeout(() => inp.focus(), 100);
 }
+
 function closePrompt() {
     document.getElementById('promptModal').style.display = 'none';
     _promptCallback = null;
 }
+
 function confirmPrompt() {
     const val = document.getElementById('promptInput').value.trim();
     if (!val) { showToast('⚠️ Name cannot be empty'); return; }
@@ -155,9 +174,9 @@ document.getElementById('promptInput').addEventListener('keydown', e => {
     if (e.key === 'Escape') closePrompt();
 });
 
-// ══════════════════════════════════════════
-//  1. RENDER MEMBER STRIP
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  1. RENDER MEMBER STRIP — 5 per row
+// ═══════════════════════════════════════════════════
 const memberStrip = document.getElementById('memberStrip');
 
 function renderStripItem(n, c, p, index) {
@@ -166,10 +185,10 @@ function renderStripItem(n, c, p, index) {
     item.dataset.name = n;
     item.style.setProperty('--strip-color', c);
     const keyLabel = index < 9 ? index + 1 : index === 9 ? '0' : '';
-    const adLabel  = index < 10 ? 'QWERTYUIOP'[index] : '';
+    const adLabel = index < 10 ? 'QWERTYUIOP'[index] : '';
     const keyBadge = keyLabel !== '' ? `<span class="strip-key">${keyLabel}</span>` : '';
-    const adBadge  = adLabel  !== '' ? `<span class="strip-ad-key">${adLabel}</span>` : '';
-    const tooltip = index < 10 ? `Hold [${keyLabel||'0'}] · Ad-Lib [${adLabel}]` : 'Hold to record';
+    const adBadge = adLabel !== '' ? `<span class="strip-ad-key">${adLabel}</span>` : '';
+    const tooltip = index < 10 ? `Hold [${keyLabel || '0'}] · Ad-Lib [${adLabel}]` : 'Hold to record';
     item.title = tooltip;
     item.innerHTML = `
         <div class="strip-avatar-wrap" id="sav-${CSS.escape(n)}">
@@ -178,7 +197,7 @@ function renderStripItem(n, c, p, index) {
             ${adBadge}
         </div>
         <div class="strip-name">${n}</div>
-        <div class="strip-time" id="strip-time-${CSS.escape(n)}">${(memberDurations[n]||0).toFixed(1)}s</div>
+        <div class="strip-time" id="strip-time-${CSS.escape(n)}">${(memberDurations[n] || 0).toFixed(1)}s</div>
         <div class="strip-tooltip">${tooltip}</div>`;
     memberStrip.appendChild(item);
 
@@ -189,8 +208,10 @@ function renderStripItem(n, c, p, index) {
     function spawnRipple() {
         const dot = document.createElement('span');
         dot.className = 'ripple-dot';
-        dot.style.width = '70px'; dot.style.height = '70px';
-        dot.style.left = '50%'; dot.style.top = '50%';
+        dot.style.width = '70px';
+        dot.style.height = '70px';
+        dot.style.left = '50%';
+        dot.style.top = '50%';
         wrap.appendChild(dot);
         setTimeout(() => dot.remove(), 1100);
     }
@@ -227,7 +248,8 @@ function renderStripItem(n, c, p, index) {
         const card = [...memberList.children].find(c => c.dataset.name === n);
         if (card) {
             card.classList.remove('is-active');
-            void card.offsetWidth; // force reflow untuk animasi balik
+            // Force reflow for reverse animation
+            void card.offsetWidth;
         }
         reorderLeaderboard();
         updatePresentationLive();
@@ -236,8 +258,10 @@ function renderStripItem(n, c, p, index) {
     item.addEventListener('mousedown', startHold);
     item.addEventListener('mouseup', stopHold);
     item.addEventListener('mouseleave', stopHold);
-    item.addEventListener('touchstart', e => { e.preventDefault(); startHold(); }, { passive: false });
-    item.addEventListener('touchend', e => { e.preventDefault(); stopHold(); }, { passive: false });
+    item.addEventListener('touchstart', e => { e.preventDefault();
+        startHold(); }, { passive: false });
+    item.addEventListener('touchend', e => { e.preventDefault();
+        stopHold(); }, { passive: false });
     item.addEventListener('touchcancel', stopHold);
 }
 
@@ -246,9 +270,9 @@ function reloadMemberStrip() {
     Object.keys(memberDurations).forEach((n, i) => renderStripItem(n, memberColors[n], memberPhotos[n], i));
 }
 
-// ══════════════════════════════════════════
-//  1b. LEADERBOARD
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  1b. LEADERBOARD (with smooth bar)
+// ═══════════════════════════════════════════════════
 function renderMemberCard(n, c, p, d) {
     const card = document.createElement('div');
     card.className = 'member-card';
@@ -271,7 +295,7 @@ function renderMemberCard(n, c, p, d) {
                 </div>
                 <div class="member-bar-wrap">
                     <div class="member-bar" id="bar-${CSS.escape(n)}"
-                         style="background:linear-gradient(90deg,${c}88,${c}); width:0%;"></div>
+                         style="background:linear-gradient(90deg,${c}88,${c});"></div>
                 </div>
             </div>
             <div class="member-actions">
@@ -297,7 +321,7 @@ function applyRankStyles() {
     const all = [...memberList.children];
     const maxDur = Math.max(...all.map(c => memberDurations[c.dataset.name] || 0), 0.001);
     all.forEach((card, i) => {
-        card.classList.remove('rank-1','rank-2','rank-3');
+        card.classList.remove('rank-1', 'rank-2', 'rank-3');
         if (i === 0) card.classList.add('rank-1');
         if (i === 1) card.classList.add('rank-2');
         if (i === 2) card.classList.add('rank-3');
@@ -306,13 +330,15 @@ function applyRankStyles() {
         const n = card.dataset.name;
         const bar = card.querySelector('.member-bar');
         if (bar) {
-            const pct = ((memberDurations[n] || 0) / maxDur * 100).toFixed(1);
-            bar.style.width = pct + '%';
+            const pct = ((memberDurations[n] || 0) / maxDur);
+            bar.style.transform = `scaleX(${pct})`;
         }
     });
 }
 
-let _lastMaxDur = 0.001, _maxDurTick = 0;
+let _lastMaxDur = 0.001,
+    _maxDurTick = 0;
+
 function updateLeaderboardLive() {
     const all = [...memberList.children];
     if (Date.now() - _maxDurTick > 500) {
@@ -324,12 +350,16 @@ function updateLeaderboardLive() {
         const el = card.querySelector('.member-time');
         if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
         const isActive = !!memberIntervals[n];
+        const isAdlib = card.classList.contains('adlib-card');
         if (card.classList.contains('is-active') !== isActive) {
             card.classList.toggle('is-active', isActive);
             if (!isActive) void card.offsetWidth;
         }
         const bar = card.querySelector('.member-bar');
-        if (bar) bar.style.width = ((memberDurations[n] || 0) / _lastMaxDur * 100).toFixed(1) + '%';
+        if (bar) {
+            const pct = ((memberDurations[n] || 0) / _lastMaxDur);
+            bar.style.transform = `scaleX(${pct})`;
+        }
     });
 }
 
@@ -338,7 +368,7 @@ function reorderLeaderboard() {
     if (cards.length === 0) return;
     const firstRects = new Map();
     cards.forEach(c => firstRects.set(c.dataset.name, c.getBoundingClientRect()));
-    const sortedNames = Object.keys(memberDurations).sort((a,b) => memberDurations[b] - memberDurations[a]);
+    const sortedNames = Object.keys(memberDurations).sort((a, b) => memberDurations[b] - memberDurations[a]);
     sortedNames.forEach(n => {
         const card = cards.find(c => c.dataset.name === n);
         if (card) memberList.appendChild(card);
@@ -358,15 +388,16 @@ function reorderLeaderboard() {
             requestAnimationFrame(() => {
                 card.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
                 card.style.transform = '';
-                setTimeout(() => { card.style.transition = ''; card.style.transform = ''; }, 600);
+                setTimeout(() => { card.style.transition = '';
+                    card.style.transform = ''; }, 600);
             });
         });
     });
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  2. TAMBAH & KELOLA MEMBER
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 async function addNewMember() {
     const n = document.getElementById('memberName').value.trim();
     if (!n) { showToast('⚠️ Member name cannot be empty'); return; }
@@ -376,7 +407,7 @@ async function addNewMember() {
     const f = document.getElementById('memberPhoto').files[0];
     let photoUrl;
     if (f) {
-        try { photoUrl = await fileToBase64(f); } catch(err) { showToast('❌ Failed to load photo'); return; }
+        try { photoUrl = await fileToBase64(f); } catch (err) { showToast('❌ Failed to load photo'); return; }
     } else {
         photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random&color=fff`;
     }
@@ -397,7 +428,8 @@ async function addNewMember() {
 }
 
 function resetMember(n) {
-    if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
+    if (memberIntervals[n]) { clearInterval(memberIntervals[n]);
+        memberIntervals[n] = null; }
     const prev = memberDurations[n];
     memberDurations[n] = 0;
     reloadMemberStrip();
@@ -411,8 +443,9 @@ function resetMember(n) {
 }
 
 function confirmDeleteMember(n) {
-    showConfirm({ icon:'🗑', title:`Delete ${n}?`, msg:'Recorded durations will be lost.', okLabel:'Delete', okClass:'btn-danger', onOk:()=>deleteMember(n) });
+    showConfirm({ icon: '🗑', title: `Delete ${n}?`, msg: 'Recorded durations will be lost.', okLabel: 'Delete', okClass: 'btn-danger', onOk: () => deleteMember(n) });
 }
+
 function deleteMember(n) {
     if (memberIntervals[n]) clearInterval(memberIntervals[n]);
     delete memberDurations[n];
@@ -426,43 +459,49 @@ function deleteMember(n) {
 
 function confirmResetAll() {
     if (Object.keys(memberDurations).length === 0) { showToast('⚠️ No members yet'); return; }
-    showConfirm({ icon:'↺', title:'Reset all durations?', msg:'All recorded times will reset to 0.', okLabel:'Reset', okClass:'btn-primary', onOk:()=>{
-        Object.keys(memberDurations).forEach(n => {
-            if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
-            memberDurations[n] = 0;
-        });
-        reloadMemberStrip();
-        reloadMemberList();
-        showToast('↺ All durations reset');
-    }});
+    showConfirm({ icon: '↺', title: 'Reset all durations?', msg: 'All recorded times will reset to 0.', okLabel: 'Reset', okClass: 'btn-primary', onOk: () => {
+            Object.keys(memberDurations).forEach(n => {
+                if (memberIntervals[n]) { clearInterval(memberIntervals[n]);
+                    memberIntervals[n] = null; }
+                memberDurations[n] = 0;
+            });
+            reloadMemberStrip();
+            reloadMemberList();
+            showToast('↺ All durations reset');
+        } });
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  3. EDIT MEMBER
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function refreshEditDropdown() {
     const sel = document.getElementById('editMemberSelect');
     const cur = sel.value;
     sel.innerHTML = '<option value="">— Select member —</option>';
     Object.keys(memberDurations).forEach(n => {
         const o = document.createElement('option');
-        o.value = n; o.textContent = n;
+        o.value = n;
+        o.textContent = n;
         sel.appendChild(o);
     });
     if (cur && memberDurations[cur] !== undefined) sel.value = cur;
 }
+
 function openEditMenu() {
     if (Object.keys(memberDurations).length === 0) { showToast('⚠️ No members yet'); return; }
     refreshEditDropdown();
     document.getElementById('editModal').style.display = 'flex';
 }
+
 function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
+
 function populateEditForm() {
     const n = document.getElementById('editMemberSelect').value;
     if (!n) return;
     document.getElementById('editMemberName').value = n;
     document.getElementById('editMemberColor').value = memberColors[n] || '#a78bfa';
 }
+
 async function applyEdit() {
     try {
         const oldName = document.getElementById('editMemberSelect').value;
@@ -490,27 +529,31 @@ async function applyEdit() {
         reloadMemberStrip();
         reloadMemberList();
         showToast(`✅ ${newName} updated`);
-    } catch(err) {
+    } catch (err) {
         console.error(err);
         showToast('❌ Failed to save');
     }
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  4. PRESET
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function getPresets() { return JSON.parse(localStorage.getItem('linedistro_presets') || '{}'); }
+
 function savePresets(d) { localStorage.setItem('linedistro_presets', JSON.stringify(d)); }
+
 function refreshPresetDropdown() {
     const sel = document.getElementById('presetSelect');
     const presets = getPresets();
     sel.innerHTML = '<option value="">— Select preset —</option>';
     Object.keys(presets).forEach(name => {
         const o = document.createElement('option');
-        o.value = name; o.textContent = name;
+        o.value = name;
+        o.textContent = name;
         sel.appendChild(o);
     });
 }
+
 function saveNewPreset() {
     if (Object.keys(memberDurations).length === 0) { showToast('⚠️ Add a member first'); return; }
     const defaultName = document.getElementById('songTitle').value.trim();
@@ -521,6 +564,7 @@ function saveNewPreset() {
     bar.style.display = 'flex';
     setTimeout(() => inp.focus(), 50);
 }
+
 function doSavePreset() {
     const inp = document.getElementById('presetSaveInput');
     const name = inp ? inp.value.trim() : '';
@@ -531,11 +575,14 @@ function doSavePreset() {
     savePresets(presets);
     refreshPresetDropdown();
     const sel = document.getElementById('presetSelect');
-    if (sel) { sel.value = name; updatePresetDropdownColor(); }
+    if (sel) { sel.value = name;
+        updatePresetDropdownColor(); }
     document.getElementById('presetSaveBar').style.display = 'none';
     showToast(`💾 Preset "${name}" saved`);
 }
+
 function cancelSavePreset() { document.getElementById('presetSaveBar').style.display = 'none'; }
+
 function updatePresetDropdownColor() {
     const sel = document.getElementById('presetSelect');
     const name = sel.value;
@@ -546,6 +593,7 @@ function updatePresetDropdownColor() {
     sel.style.borderColor = firstColor;
     sel.style.boxShadow = `0 0 0 2px ${firstColor}22`;
 }
+
 function loadSelectedPreset() {
     const name = document.getElementById('presetSelect').value;
     if (!name) return;
@@ -553,7 +601,9 @@ function loadSelectedPreset() {
     const preset = getPresets()[name];
     if (!preset) return;
     const doLoad = () => {
-        memberDurations = {}; memberColors = {}; memberPhotos = {};
+        memberDurations = {};
+        memberColors = {};
+        memberPhotos = {};
         preset.forEach(m => {
             memberDurations[m.name] = 0;
             memberColors[m.name] = m.color || '#a78bfa';
@@ -565,41 +615,49 @@ function loadSelectedPreset() {
         showToast(`✅ Preset "${name}" loaded`);
     };
     if (Object.keys(memberDurations).length > 0) {
-        showConfirm({ icon:'📂', title:`Load "${name}"?`, msg:'Current members will be replaced.', okLabel:'Load', okClass:'btn-primary', onOk:doLoad });
+        showConfirm({ icon: '📂', title: `Load "${name}"?`, msg: 'Current members will be replaced.', okLabel: 'Load', okClass: 'btn-primary', onOk: doLoad });
     } else { doLoad(); }
 }
+
 function deleteSelectedPreset() {
     const name = document.getElementById('presetSelect').value;
     if (!name) { showToast('⚠️ Select a preset first'); return; }
-    showConfirm({ icon:'🗑', title:`Delete preset "${name}"?`, msg:'This preset will be permanently deleted.', okLabel:'Delete', okClass:'btn-danger', onOk:()=>{
-        const presets = getPresets();
-        delete presets[name];
-        savePresets(presets);
-        refreshPresetDropdown();
-        showToast(`🗑 Preset "${name}" deleted`);
-    }});
+    showConfirm({ icon: '🗑', title: `Delete preset "${name}"?`, msg: 'This preset will be permanently deleted.', okLabel: 'Delete', okClass: 'btn-danger', onOk: () => {
+            const presets = getPresets();
+            delete presets[name];
+            savePresets(presets);
+            refreshPresetDropdown();
+            showToast(`🗑 Preset "${name}" deleted`);
+        } });
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  5. MEDIA
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function loadLocalMedia(input) {
     const file = input.files[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
     const vid = document.getElementById('localMedia');
     const aud = document.getElementById('audioPlayer');
-    const yt  = document.getElementById('player');
+    const yt = document.getElementById('player');
     const lbl = document.getElementById('mediaLabel');
-    yt.style.display = 'none'; vid.style.display = 'none'; aud.style.display = 'none';
+    yt.style.display = 'none';
+    vid.style.display = 'none';
+    aud.style.display = 'none';
     if (file.type.startsWith('video/')) {
-        vid.src = url; vid.style.display = 'block'; vid.load();
+        vid.src = url;
+        vid.style.display = 'block';
+        vid.load();
         lbl.textContent = `🎬 ${file.name}`;
     } else if (file.type.startsWith('audio/')) {
-        aud.src = url; aud.style.display = 'block'; aud.load();
+        aud.src = url;
+        aud.style.display = 'block';
+        aud.load();
         lbl.textContent = `🎵 ${file.name}`;
     } else { showToast('⚠️ Format tidak didukung'); }
 }
+
 function loadVideo() {
     const url = document.getElementById('ytLink').value.trim();
     const v = (url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&]{11})/))?.[1];
@@ -610,26 +668,26 @@ function loadVideo() {
     const yt = document.getElementById('player');
     yt.style.display = 'block';
     window._currentYtVideoId = v;
-    if (window.ytPlayer) { window.ytPlayer.loadVideoById(v); }
-    else { window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v }); }
+    if (window.ytPlayer) { window.ytPlayer.loadVideoById(v); } else { window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v }); }
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  6. FINISH & CHART
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function finish() {
     const names = Object.keys(memberDurations);
     if (names.length === 0) { showToast('No members added yet'); return; }
-    const total = Object.values(memberDurations).reduce((a,b) => a+b, 0);
+    const total = Object.values(memberDurations).reduce((a, b) => a + b, 0);
     if (total === 0) { showToast('All durations are 0 — record first!'); return; }
     Object.keys(memberIntervals).forEach(n => {
-        if (memberIntervals[n]) { clearInterval(memberIntervals[n]); memberIntervals[n] = null; }
+        if (memberIntervals[n]) { clearInterval(memberIntervals[n]);
+            memberIntervals[n] = null; }
         const card = [...memberList.children].find(c => c.dataset.name === n);
         if (card) card.classList.remove('is-active');
         const si = memberStrip.querySelector(`.strip-item[data-name="${n}"]`);
         if (si) si.classList.remove('holding');
     });
-    const sorted = [...names].sort((a,b) => memberDurations[b] - memberDurations[a]);
+    const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
     const title = document.getElementById('songTitle').value.trim() || 'Untitled';
     const lb = document.getElementById('leaderboard');
     lb.innerHTML = '';
@@ -683,12 +741,14 @@ function finish() {
     saveToHistory(title, sorted, memberDurations, memberColors, memberPhotos, total);
     document.getElementById('resultModal').style.display = 'flex';
 }
+
 function closeResultModal() { document.getElementById('resultModal').style.display = 'none'; }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  7. HISTORY
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 function getHistory() { return JSON.parse(localStorage.getItem('linedistro_history') || '[]'); }
+
 function saveHistory(d) { localStorage.setItem('linedistro_history', JSON.stringify(d)); }
 
 function saveToHistory(title, sorted, durations, colors, photos, total) {
@@ -730,20 +790,24 @@ function openMemberStats(memberName) {
     window._statsChart = new Chart(canvas, {
         type: 'line',
         data: {
-            labels: stats.map(s => s.title.length > 12 ? s.title.substring(0,11)+'…' : s.title),
+            labels: stats.map(s => s.title.length > 12 ? s.title.substring(0, 11) + '…' : s.title),
             datasets: [{
                 label: 'Duration (s)',
                 data: stats.map(s => s.duration.toFixed(1)),
                 borderColor: memberColors[memberName] || '#a78bfa',
                 backgroundColor: (memberColors[memberName] || '#a78bfa') + '22',
-                fill: true, tension: 0.4, pointRadius: 5,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 5,
                 pointBackgroundColor: memberColors[memberName] || '#a78bfa',
             }, {
                 label: 'Share (%)',
                 data: stats.map(s => s.pct),
                 borderColor: '#67e8f9',
                 backgroundColor: '#67e8f922',
-                fill: false, tension: 0.4, pointRadius: 5,
+                fill: false,
+                tension: 0.4,
+                pointRadius: 5,
                 pointBackgroundColor: '#67e8f9',
                 yAxisID: 'y2',
             }]
@@ -760,6 +824,7 @@ function openMemberStats(memberName) {
     });
     modal.style.display = 'flex';
 }
+
 function closeMemberStatsModal() { document.getElementById('memberStatsModal').style.display = 'none'; }
 
 function openHistory() {
@@ -813,6 +878,7 @@ function openHistory() {
     }
     document.getElementById('historyModal').style.display = 'flex';
 }
+
 function toggleHistoryDetail(id) {
     const detail = document.getElementById(`detail-${id}`);
     const chev = document.getElementById(`chev-${id}`);
@@ -820,21 +886,26 @@ function toggleHistoryDetail(id) {
     detail.classList.toggle('open', !isOpen);
     chev.classList.toggle('open', !isOpen);
 }
+
 function confirmDeleteHistoryEntry(id) {
-    showConfirm({ icon:'🗑', title:'Delete riwayat ini?', msg:'This recording data cannot be recovered.', okLabel:'Delete', okClass:'btn-danger', onOk:()=>{
-        saveHistory(getHistory().filter(e => e.id !== id));
-        openHistory();
-        showToast('🗑 History entry deleted');
-    }});
+    showConfirm({ icon: '🗑', title: 'Delete riwayat ini?', msg: 'This recording data cannot be recovered.', okLabel: 'Delete', okClass: 'btn-danger', onOk: () => {
+            saveHistory(getHistory().filter(e => e.id !== id));
+            openHistory();
+            showToast('🗑 History entry deleted');
+        } });
 }
+
 function confirmClearHistory() {
-    showConfirm({ icon:'🗑', title:'Delete semua riwayat?', msg:'All recording history will be permanently deleted.', okLabel:'Delete Semua', okClass:'btn-danger', onOk:()=>{ saveHistory([]); openHistory(); showToast('🗑 All history cleared'); } });
+    showConfirm({ icon: '🗑', title: 'Delete semua riwayat?', msg: 'All recording history will be permanently deleted.', okLabel: 'Delete Semua', okClass: 'btn-danger', onOk: () => { saveHistory([]);
+            openHistory();
+            showToast('🗑 All history cleared'); } });
 }
+
 function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  8. KEYBOARD SHORTCUTS
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 const activeKeyHolds = new Set();
 document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -842,9 +913,7 @@ document.addEventListener('keydown', e => {
         e.preventDefault();
         const vid = document.getElementById('localMedia');
         const aud = document.getElementById('audioPlayer');
-        if (vid.style.display !== 'none') { vid.paused ? vid.play() : vid.pause(); }
-        else if (aud.style.display !== 'none') { aud.paused ? aud.play() : aud.pause(); }
-        else if (window.ytPlayer) { window.ytPlayer.getPlayerState() === 1 ? window.ytPlayer.pauseVideo() : window.ytPlayer.playVideo(); }
+        if (vid.style.display !== 'none') { vid.paused ? vid.play() : vid.pause(); } else if (aud.style.display !== 'none') { aud.paused ? aud.play() : aud.pause(); } else if (window.ytPlayer) { window.ytPlayer.getPlayerState() === 1 ? window.ytPlayer.pauseVideo() : window.ytPlayer.playVideo(); }
         return;
     }
     let idx = parseInt(e.key) - 1;
@@ -884,9 +953,9 @@ window.addEventListener('blur', () => {
     activeAdLibKeys.clear();
 });
 
-// ══════════════════════════════════════════
-//  AD-LIBS (Q-P)
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  AD-LIBS (Q-P) — hijau glow & bar berubah
+// ═══════════════════════════════════════════════════
 const AD_KEYS = 'QWERTYUIOP'.split('');
 const activeAdLibKeys = new Set();
 let adLibIntervals = {};
@@ -923,6 +992,7 @@ function handleAdLibKeyDown(e) {
         addAdLibTime(n, 0.5);
     }, 200);
 }
+
 function handleAdLibKeyUp(e) {
     const key = e.key.toUpperCase();
     const idx = AD_KEYS.indexOf(key);
@@ -934,14 +1004,24 @@ function handleAdLibKeyUp(e) {
         delete adLibIntervals[idx];
     }
 }
+
 function startAdLib(idx, item) {
     item.classList.add('adlib-active');
     const wrap = item.querySelector('.strip-avatar-wrap');
     if (wrap) wrap.classList.add('adlib-glow');
     const n = item.dataset.name;
     const card = [...memberList.children].find(c => c.dataset.name === n);
-    if (card) card.classList.add('adlib-card');
+    if (card) {
+        card.classList.add('adlib-card');
+        // Ubah warna bar menjadi hijau glow
+        const bar = card.querySelector('.member-bar');
+        if (bar) {
+            bar.style.background = 'linear-gradient(90deg, #4ade80, #22d3ee)';
+            bar.style.boxShadow = '0 0 12px #4ade80';
+        }
+    }
 }
+
 function clearAdLib(idx) {
     const items = document.querySelectorAll('.strip-item');
     const item = items[idx];
@@ -951,7 +1031,16 @@ function clearAdLib(idx) {
     if (wrap) wrap.classList.remove('adlib-glow');
     const n = item.dataset.name;
     const card = [...memberList.children].find(c => c.dataset.name === n);
-    if (card) card.classList.remove('adlib-card');
+    if (card) {
+        card.classList.remove('adlib-card');
+        // Kembalikan warna bar ke warna asli
+        const bar = card.querySelector('.member-bar');
+        if (bar) {
+            const c = memberColors[n] || '#a78bfa';
+            bar.style.background = `linear-gradient(90deg, ${c}88, ${c})`;
+            bar.style.boxShadow = 'none';
+        }
+    }
 }
 
 // Tutup modal klik backdrop
@@ -959,65 +1048,78 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
     el.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; });
 });
 
-// ══════════════════════════════════════════
-//  9. PRESENTATION MODE
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  9. PRESENTATION MODE — video background
+// ═══════════════════════════════════════════════════
 function openPresentation() {
     const names = Object.keys(memberDurations);
     if (names.length === 0) { showToast('⚠️ No members to present'); return; }
-    const pressVid = document.getElementById('pressVideo');
-    const pressAud = document.getElementById('pressAudio');
-    const pressYt  = document.getElementById('pressYtWrap');
-    pressVid.style.display = 'none'; pressAud.style.display = 'none'; pressYt.style.display = 'none';
-    pressVid.src = ''; pressAud.src = '';
+
+    const bgVideo = document.getElementById('pressBgVideo');
+    const bgAudio = document.getElementById('pressBgAudio');
     const localVid = document.getElementById('localMedia');
     const localAud = document.getElementById('audioPlayer');
+
+    // Sembunyikan semua dulu
+    bgVideo.style.display = 'none';
+    bgAudio.style.display = 'none';
+    bgVideo.src = '';
+    bgAudio.src = '';
+
     if (localVid.style.display !== 'none' && localVid.src) {
-        pressVid.src = localVid.src;
-        pressVid.currentTime = localVid.currentTime;
-        pressVid.style.display = 'block';
+        bgVideo.src = localVid.src;
+        bgVideo.currentTime = localVid.currentTime;
+        bgVideo.style.display = 'block';
+        if (!localVid.paused) bgVideo.play();
     } else if (localAud.style.display !== 'none' && localAud.src) {
-        pressAud.src = localAud.src;
-        pressAud.currentTime = localAud.currentTime;
-        pressAud.style.display = 'block';
+        bgAudio.src = localAud.src;
+        bgAudio.currentTime = localAud.currentTime;
+        bgAudio.style.display = 'block';
+        if (!localAud.paused) bgAudio.play();
     } else if (window.ytPlayer) {
-        pressYt.style.display = 'block';
-        pressYt.innerHTML = '';
-        const videoId = window._currentYtVideoId || '';
-        if (videoId) {
-            pressYt.innerHTML = `<iframe
-                width="100%" height="280"
-                src="https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0"
-                frameborder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowfullscreen
-                style="border-radius:12px;">
-            </iframe>`;
-        }
+        // YouTube tidak bisa di-background, fallback ke blur
+        const wrap = document.getElementById('pressBgVideoWrap');
+        wrap.style.opacity = '0.1';
+        wrap.style.background = '#000';
+        showToast('⚠️ YouTube tidak bisa di-background, gunakan MP4/Audio');
     }
+
     document.getElementById('presentationOverlay').style.display = 'flex';
     renderPresentationBars();
 }
+
 function closePresentation() {
     document.getElementById('presentationOverlay').style.display = 'none';
-    if (_pressReorderTimer) { clearTimeout(_pressReorderTimer); _pressReorderTimer = null; }
+    if (_pressReorderTimer) { clearTimeout(_pressReorderTimer);
+        _pressReorderTimer = null; }
+    // Hentikan background video
+    const bgVideo = document.getElementById('pressBgVideo');
+    const bgAudio = document.getElementById('pressBgAudio');
+    if (bgVideo) { bgVideo.pause(); }
+    if (bgAudio) { bgAudio.pause(); }
 }
+
 function syncPresentationMedia() {
+    const bgVideo = document.getElementById('pressBgVideo');
+    const bgAudio = document.getElementById('pressBgAudio');
     const localVid = document.getElementById('localMedia');
-    const pressVid = document.getElementById('pressVideo');
     const localAud = document.getElementById('audioPlayer');
-    const pressAud = document.getElementById('pressAudio');
-    if (localVid.style.display !== 'none' && pressVid.style.display !== 'none') {
-        pressVid.currentTime = localVid.currentTime;
-        if (!localVid.paused) pressVid.play(); else pressVid.pause();
-    } else if (localAud.style.display !== 'none' && pressAud.style.display !== 'none') {
-        pressAud.currentTime = localAud.currentTime;
-        if (!localAud.paused) pressAud.play(); else pressAud.pause();
+
+    if (localVid.style.display !== 'none' && bgVideo.style.display !== 'none') {
+        bgVideo.currentTime = localVid.currentTime;
+        if (!localVid.paused) bgVideo.play();
+        else bgVideo.pause();
+    } else if (localAud.style.display !== 'none' && bgAudio.style.display !== 'none') {
+        bgAudio.currentTime = localAud.currentTime;
+        if (!localAud.paused) bgAudio.play();
+        else bgAudio.pause();
     }
     showToast('⏱ Synced');
 }
 
-let _pressReorderTimer = null, _pressIsReordering = false;
+let _pressReorderTimer = null,
+    _pressIsReordering = false;
+
 function pressId(prefix, name) { return prefix + name.replace(/[^a-zA-Z0-9]/g, '_'); }
 
 function renderPresentationBars() {
@@ -1025,11 +1127,11 @@ function renderPresentationBars() {
     container.innerHTML = '';
     const names = Object.keys(memberDurations);
     const maxDur = Math.max(...Object.values(memberDurations), 0.001);
-    const sorted = [...names].sort((a,b) => memberDurations[b] - memberDurations[a]);
+    const sorted = [...names].sort((a, b) => memberDurations[b] - memberDurations[a]);
     const title = document.getElementById('songTitle').value.trim() || 'Line Distribution';
     document.getElementById('pressSongTitle').textContent = title;
     sorted.forEach((n, i) => {
-        const barPct = ((memberDurations[n] / maxDur) * 100).toFixed(1);
+        const barPct = ((memberDurations[n] / maxDur));
         const c = memberColors[n] || '#a78bfa';
         const row = document.createElement('div');
         row.className = 'press-row';
@@ -1037,6 +1139,7 @@ function renderPresentationBars() {
         row.style.animationDelay = (i * 0.06) + 's';
         row.style.setProperty('--press-color', c);
         const isRecording = !!memberIntervals[n];
+        const isAdlib = false; // Kita tidak track adlib di presentasi
         const avatarScale = isRecording ? 'scale(1.15)' : 'scale(1)';
         const avatarShadow = isRecording ? `0 0 28px 8px ${c}99` : `0 0 14px 2px ${c}44`;
         row.innerHTML = `
@@ -1049,7 +1152,7 @@ function renderPresentationBars() {
                 <div class="press-bar-wrap">
                     <div class="press-bar"
                          id="${pressId('pbar-',n)}"
-                         style="width:${barPct}%; background:linear-gradient(90deg,${c}99,${c});"></div>
+                         style="background:linear-gradient(90deg,${c}99,${c}); transform:scaleX(${barPct});"></div>
                 </div>
             </div>
             <span class="press-time" id="${pressId('ptime-',n)}">${memberDurations[n].toFixed(1)}s</span>`;
@@ -1070,7 +1173,10 @@ function updatePresentationLive() {
         const time = row.querySelector('.press-time');
         const avatar = row.querySelector('.press-avatar');
         const c = memberColors[n] || '#a78bfa';
-        if (bar) bar.style.width = ((memberDurations[n] || 0) / maxDur * 100).toFixed(1) + '%';
+        if (bar) {
+            const pct = ((memberDurations[n] || 0) / maxDur);
+            bar.style.transform = `scaleX(${pct})`;
+        }
         if (time) time.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
         if (avatar) {
             const rec = !!memberIntervals[n];
@@ -1083,7 +1189,7 @@ function updatePresentationLive() {
         _pressReorderTimer = null;
         if (_pressIsReordering) return;
         const curRows = [...container.children];
-        const sortedNames = Object.keys(memberDurations).sort((a,b) => memberDurations[b] - memberDurations[a]);
+        const sortedNames = Object.keys(memberDurations).sort((a, b) => memberDurations[b] - memberDurations[a]);
         const same = sortedNames.every((n, i) => curRows[i] && curRows[i].dataset.name === n);
         if (same) return;
         _pressIsReordering = true;
@@ -1107,7 +1213,8 @@ function updatePresentationLive() {
                     requestAnimationFrame(() => {
                         row.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
                         row.style.transform = '';
-                        setTimeout(() => { row.style.transition = ''; row.style.transform = ''; }, 600);
+                        setTimeout(() => { row.style.transition = '';
+                            row.style.transform = ''; }, 600);
                     });
                 });
                 setTimeout(() => { _pressIsReordering = false; }, 600);
@@ -1116,9 +1223,9 @@ function updatePresentationLive() {
     }, 600);
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  10. INIT
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 window.onload = () => {
     loadPhotoCache();
     refreshPresetDropdown();
@@ -1128,17 +1235,20 @@ window.onload = () => {
     const saveEditBtn = document.querySelector('#editModal .btn-primary');
     if (saveEditBtn) {
         saveEditBtn.removeAttribute('onclick');
-        saveEditBtn.addEventListener('click', (e) => { e.preventDefault(); applyEdit(); });
+        saveEditBtn.addEventListener('click', (e) => { e.preventDefault();
+            applyEdit(); });
     }
     const addBtn = document.getElementById('addMemberBtn');
     if (addBtn) {
         addBtn.removeAttribute('onclick');
-        addBtn.addEventListener('click', (e) => { e.preventDefault(); addNewMember(); });
+        addBtn.addEventListener('click', (e) => { e.preventDefault();
+            addNewMember(); });
     }
     const promptSaveBtn = document.getElementById('promptSaveBtn');
     if (promptSaveBtn) {
         promptSaveBtn.removeAttribute('onclick');
-        promptSaveBtn.addEventListener('click', (e) => { e.preventDefault(); confirmPrompt(); });
+        promptSaveBtn.addEventListener('click', (e) => { e.preventDefault();
+            confirmPrompt(); });
     }
     updateTotalDuration();
     const presetSaveInput = document.getElementById('presetSaveInput');
