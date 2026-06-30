@@ -16,7 +16,6 @@
     --cyan:      #67e8f9;
     --pink:      #f472b6;
     --danger:    #f87171;
-    --green:     #4ade80;
 
     --text:      #e2e0f0;
     --text2:     #9490b0;
@@ -141,6 +140,7 @@ input[type="color"] {
     overflow: hidden;
 }
 
+/* Decorative glow di pojok panel */
 .panel::before {
     content: '';
     position: absolute;
@@ -308,6 +308,7 @@ button, .file-btn {
     50%      { opacity: 1; }
 }
 
+/* Ripple container */
 .ripple-dot {
     position: absolute;
     border-radius: 50%;
@@ -335,6 +336,7 @@ button, .file-btn {
     to   { filter: brightness(1.18); }
 }
 
+/* REC dot indicator */
 .rec-dot {
     display: inline-block;
     width: 8px; height: 8px;
@@ -732,7 +734,7 @@ button, .file-btn {
 }
 
 /* ══════════════════════════════════════════
-   MEMBER STRIP
+   MEMBER STRIP (horizontal, hold-to-record)
    ══════════════════════════════════════════ */
 .member-strip {
     display: flex;
@@ -838,73 +840,6 @@ button, .file-btn {
 }
 
 /* ══════════════════════════════════════════
-   STRIP KEYBOARD BADGE (nomor hold) — kanan bawah
-   ══════════════════════════════════════════ */
-.strip-key {
-    position: absolute;
-    bottom: -2px;
-    right: -2px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--strip-color, var(--purple));
-    color: #fff;
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 10px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid var(--surface);
-    pointer-events: none;
-    z-index: 2;
-}
-
-/* ══════════════════════════════════════════
-   STRIP AD-LIB BADGE (QWERTYUIOP) — kiri bawah
-   ══════════════════════════════════════════ */
-.strip-ad-key {
-    position: absolute;
-    bottom: -2px;
-    left: -2px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--text3);
-    color: var(--text);
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 10px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid var(--surface);
-    pointer-events: none;
-    z-index: 2;
-    transition: all 0.25s ease;
-}
-
-/* Saat ad-lib aktif — glow hijau */
-.strip-item.adlib-active .strip-ad-key {
-    background: var(--green);
-    color: #000;
-    box-shadow: 0 0 16px 4px rgba(74, 222, 128, 0.8);
-}
-
-/* Avatar wrap glow hijau saat ad-lib */
-.strip-avatar-wrap.adlib-glow::before {
-    border-color: var(--green) !important;
-    box-shadow: 0 0 24px 8px rgba(74, 222, 128, 0.6) !important;
-    opacity: 1 !important;
-}
-
-/* Card leaderboard juga dapat glow hijau */
-.member-card.adlib-card .member-avatar {
-    border-color: var(--green) !important;
-    box-shadow: 0 0 20px 6px rgba(74, 222, 128, 0.5) !important;
-}
-
-/* ══════════════════════════════════════════
    MEMBER LIST — now read-only leaderboard
    ══════════════════════════════════════════ */
 .member-list { position: relative; }
@@ -924,6 +859,56 @@ button, .file-btn {
 .member-card.rank-2 .rank-num { color: #cbd5e1; }
 .member-card.rank-3 .rank-num { color: #d97706; }
 
+/* Badge nomor shortcut keyboard di pojok foto strip */
+.strip-key {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--strip-color, var(--purple));
+    color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--surface);
+    pointer-events: none;
+}
+
+/* Ad-lib badge di samping kiri foto */
+.strip-ad-key {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.6);
+    color: #4ade80;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--surface);
+    pointer-events: none;
+    transition: all 0.3s ease;
+}
+
+.strip-item.adlib-active .strip-ad-key {
+    background: #4ade80;
+    color: #000;
+    box-shadow: 0 0 16px 4px rgba(74,222,128,0.7);
+}
+
+/* ══════════════════════════════════════════
+   MEMBER CARD — transparent, no box
+   ══════════════════════════════════════════ */
 .member-card-inner {
     display: flex;
     align-items: center;
@@ -932,6 +917,7 @@ button, .file-btn {
     padding: 4px 0;
 }
 
+/* Avatar */
 .member-card .member-avatar {
     width: 42px;
     height: 42px;
@@ -944,6 +930,7 @@ button, .file-btn {
                 border-color 0.4s ease;
 }
 
+/* Teks: nama + bar */
 .member-text {
     flex: 1;
     min-width: 0;
@@ -965,6 +952,7 @@ button, .file-btn {
     flex-shrink: 0;
 }
 
+/* Bar */
 .member-bar-wrap {
     width: 100%;
     height: 4px;
@@ -981,6 +969,7 @@ button, .file-btn {
     max-width: 100%;
 }
 
+/* Glow dot di ujung bar */
 .member-bar::after {
     content: '';
     position: absolute;
@@ -995,10 +984,12 @@ button, .file-btn {
     opacity: 0.85;
 }
 
+/* Bar melebar saat active */
 .member-card.is-active .member-bar {
     transition: width 0.15s linear;
 }
 
+/* Separator antar member */
 .member-list { gap: 2px; }
 
 /* ══════════════════════════════════════════
@@ -1061,7 +1052,7 @@ button, .file-btn {
 .modal-topbar h3 { text-align: left !important; }
 
 /* ══════════════════════════════════════════
-   PRESENTATION MODE
+   PRESENTATION MODE — overlay + two column
    ══════════════════════════════════════════ */
 .press-overlay {
     position: fixed;
@@ -1106,6 +1097,7 @@ button, .file-btn {
     color: #fff;
 }
 
+/* Two-column layout */
 .press-layout {
     position: relative;
     z-index: 2;
@@ -1118,12 +1110,14 @@ button, .file-btn {
     padding: 60px 56px;
 }
 
+/* Left: member bars */
 .press-inner {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
+/* Right: media */
 .press-media {
     display: flex;
     flex-direction: column;
@@ -1134,8 +1128,8 @@ button, .file-btn {
 
 .press-yt-wrap { width: 100%; border-radius: 14px; overflow: hidden; }
 #pressVideo { border-radius: 14px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.6); }
-#pressAudio { border-radius: 14px; width: 100%; }
 
+/* Song title */
 .press-title {
     font-family: 'Space Grotesk', sans-serif;
     font-size: 13px;
@@ -1146,12 +1140,14 @@ button, .file-btn {
     margin-bottom: 20px;
 }
 
+/* Member rows container */
 .press-bars {
     display: flex;
     flex-direction: column;
     gap: 14px;
 }
 
+/* Each member row */
 .press-row {
     display: grid;
     grid-template-columns: 52px 1fr 60px;
@@ -1167,6 +1163,7 @@ button, .file-btn {
     to   { opacity: 1; transform: translateX(0); }
 }
 
+/* Avatar */
 .press-avatar {
     width: 48px;
     height: 48px;
@@ -1180,6 +1177,7 @@ button, .file-btn {
         border-color 0.5s ease;
 }
 
+/* Member info: nama + bar */
 .press-member-info {
     display: flex;
     flex-direction: column;
@@ -1199,6 +1197,7 @@ button, .file-btn {
     text-overflow: ellipsis;
 }
 
+/* Bar wrapper */
 .press-bar-wrap {
     width: 100%;
     height: 5px;
@@ -1207,6 +1206,7 @@ button, .file-btn {
     overflow: hidden;
 }
 
+/* Bar fill */
 .press-bar {
     height: 100%;
     border-radius: 3px;
@@ -1216,6 +1216,7 @@ button, .file-btn {
     position: relative;
 }
 
+/* Glow dot di ujung bar */
 .press-bar::after {
     content: '';
     position: absolute;
@@ -1230,6 +1231,7 @@ button, .file-btn {
     opacity: 0.9;
 }
 
+/* Duration text */
 .press-time {
     font-family: 'Space Grotesk', monospace;
     font-size: 14px;
@@ -1239,6 +1241,7 @@ button, .file-btn {
     white-space: nowrap;
 }
 
+/* Hide old meta/badge */
 .press-meta { display: none; }
 .press-badge { display: none; }
 
