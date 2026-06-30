@@ -268,7 +268,7 @@ function renderStripItem(n, c, p, index) {
         const card = [...memberList.children].find(c => c.dataset.name === n);
         if (card) {
             card.classList.remove('is-active');
-            // Trigger reflow untuk restart animasi balik
+            // Force reflow untuk restart transisi balik
             void card.offsetWidth;
         }
         reorderLeaderboard();
@@ -370,7 +370,7 @@ function updateLeaderboardLive() {
         const isActive = !!memberIntervals[n];
         if (card.classList.contains('is-active') !== isActive) {
             card.classList.toggle('is-active', isActive);
-            // Trigger reflow untuk animasi balik
+            // Force reflow untuk animasi balik
             if (!isActive) void card.offsetWidth;
         }
         const bar = card.querySelector('.member-bar');
@@ -786,56 +786,4 @@ function finish() {
         data: {
             labels: sorted,
             datasets: [{
-                data: sorted.map(n => memberDurations[n].toFixed(2)),
-                backgroundColor: sorted.map(n => memberColors[n]),
-                borderColor: '#13131f',
-                borderWidth: 3
-            }]
-        },
-        options: {
-            plugins: {
-                legend: { labels: { color: '#9490b0', font: { family: 'Inter', size: 12 }, boxWidth: 14 } },
-                tooltip: {
-                    callbacks: {
-                        label: ctx => {
-                            const pct = ((ctx.parsed / total) * 100).toFixed(1);
-                            return ` ${ctx.parsed}s  (${pct}%)`;
-                        }
-                    }
-                }
-            },
-            cutout: '60%'
-        }
-    });
-
-    saveToHistory(title, sorted, memberDurations, memberColors, memberPhotos, total);
-    document.getElementById('resultModal').style.display = 'flex';
-}
-
-function closeResultModal() { document.getElementById('resultModal').style.display = 'none'; }
-
-// ══════════════════════════════════════════
-//  7. HISTORY
-// ══════════════════════════════════════════
-function getHistory()  { return JSON.parse(localStorage.getItem('linedistro_history') || '[]'); }
-function saveHistory(d){ localStorage.setItem('linedistro_history', JSON.stringify(d)); }
-
-function saveToHistory(title, sorted, durations, colors, photos, total) {
-    const history = getHistory();
-    history.unshift({
-        id: Date.now(),
-        title,
-        date: new Date().toLocaleString('en-US'),
-        totalDuration: total,
-        members: sorted.map(n => ({
-            name: n, duration: durations[n], color: colors[n], photo: photos[n],
-            pct: ((durations[n] / total) * 100).toFixed(1)
-        }))
-    });
-    saveHistory(history);
-}
-
-function getMemberStats(memberName) {
-    const history = getHistory();
-    return history
-       
+                data: sorted.map(n => member
