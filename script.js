@@ -179,13 +179,13 @@ function showConfirm(_ref) {
     _confirmCallback = onOk;
     var modal = document.getElementById('confirmModal');
     modal.style.display = 'flex';
-    modal.style.zIndex = '9999'; // FIX: muncul di atas modal lain
+    modal.style.zIndex = '9999';
 }
 
 function closeConfirm() {
     var modal = document.getElementById('confirmModal');
     modal.style.display = 'none';
-    modal.style.zIndex = ''; // FIX: kembalikan ke default
+    modal.style.zIndex = '';
     _confirmCallback = null;
 }
 
@@ -908,6 +908,58 @@ function getCurrentPlayerTime() {
 }
 
 // ══════════════════════════════════════════
+//  PLAYER CONTROL (Space, ArrowLeft, ArrowRight)
+// ══════════════════════════════════════════
+function togglePlayerPlayback() {
+    var vid = document.getElementById('localMedia');
+    var aud = document.getElementById('audioPlayer');
+    if (window.ytPlayer && window.ytPlayer.getPlayerState) {
+        var state = window.ytPlayer.getPlayerState();
+        if (state === 1) {
+            window.ytPlayer.pauseVideo();
+        } else if (state === 2) {
+            window.ytPlayer.playVideo();
+        } else {
+            window.ytPlayer.playVideo();
+        }
+        return;
+    }
+    if (vid.style.display !== 'none' && vid.src) {
+        vid.paused ? vid.play() : vid.pause();
+        return;
+    }
+    if (aud.style.display !== 'none' && aud.src) {
+        aud.paused ? aud.play() : aud.pause();
+        return;
+    }
+}
+
+function seekPlayer(seconds) {
+    var vid = document.getElementById('localMedia');
+    var aud = document.getElementById('audioPlayer');
+    if (window.ytPlayer && window.ytPlayer.getCurrentTime) {
+        var current = window.ytPlayer.getCurrentTime() || 0;
+        var newTime = Math.max(0, current + seconds);
+        var duration = window.ytPlayer.getDuration() || 0;
+        if (newTime > duration) newTime = duration;
+        window.ytPlayer.seekTo(newTime, true);
+        return;
+    }
+    if (vid.style.display !== 'none' && vid.src) {
+        var newVidTime = Math.max(0, vid.currentTime + seconds);
+        if (newVidTime > vid.duration) newVidTime = vid.duration;
+        vid.currentTime = newVidTime;
+        return;
+    }
+    if (aud.style.display !== 'none' && aud.src) {
+        var newAudTime = Math.max(0, aud.currentTime + seconds);
+        if (newAudTime > aud.duration) newAudTime = aud.duration;
+        aud.currentTime = newAudTime;
+        return;
+    }
+}
+
+// ══════════════════════════════════════════
 //  FAIRNESS (Gini Coefficient) — ENGLISH
 // ══════════════════════════════════════════
 function calculateFairness(durations) {
@@ -1245,24 +1297,34 @@ function confirmClearHistory() {
 function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
 
 // ══════════════════════════════════════════
-//  8. KEYBOARD SHORTCUTS + AD-LIBS HOLD
+//  8. KEYBOARD SHORTCUTS + AD-LIBS HOLD + PLAYER CONTROL
 // ══════════════════════════════════════════
 var activeKeyHolds = new Set();
 
 document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    if (e.ctrlKey && e.key === 's') {
+    // ── PLAYER CONTROL (Space, ArrowLeft, ArrowRight) ──
+    if (e.key === ' ' || e.key === 'Space' || e.key === 'Spacebar') {
         e.preventDefault();
-        saveNewPreset();
+        togglePlayerPlayback();
+        return;
+    }
+    if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        seekPlayer(-5);
+        return;
+    }
+    if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        seekPlayer(5);
         return;
     }
 
-    if (e.code === 'Space') {
+    // ── SHORTCUTS ──
+    if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
-        var vid = document.getElementById('localMedia');
-        var aud = document.getElementById('audioPlayer');
-        if (vid.style.display !== 'none') { vid.paused ? vid.play() : vid.pause(); } else if (aud.style.display !== 'none') { aud.paused ? aud.play() : aud.pause(); } else if (window.ytPlayer) { window.ytPlayer.getPlayerState() === 1 ? window.ytPlayer.pauseVideo() : window.ytPlayer.playVideo(); }
+        saveNewPreset();
         return;
     }
 
@@ -1299,6 +1361,7 @@ document.addEventListener('keydown', function(e) {
             break;
     }
 
+    // ── HOLD MEMBER (1-9, 0) ──
     var idx = parseInt(e.key) - 1;
     if (e.key === '0') idx = 9;
     if (isNaN(idx) || idx < 0 || idx > 9) {
@@ -1315,6 +1378,12 @@ document.addEventListener('keydown', function(e) {
 
 document.addEventListener('keyup', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    // Abaikan jika tombol player
+    if (e.key === ' ' || e.key === 'Space' || e.key === 'Spacebar' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        return;
+    }
+
     var idx = parseInt(e.key) - 1;
     if (e.key === '0') idx = 9;
     if (isNaN(idx) || idx < 0 || idx > 9) {
