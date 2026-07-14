@@ -1724,6 +1724,106 @@ function syncPresentationMedia() {
     showToast('⏱ Synced');
 }
 
+// ── HANYA SATU DEFINISI reorderPresentationBars ──
+function reorderPresentationBars() {
+    if (_pressReorderPending) return;
+    _pressReorderPending = true;
+    requestAnimationFrame(function() {
+        var container = document.getElementById('pressBars');
+        var rows = container ? container.children : [];
+        if (rows.length === 0) {
+            _pressReorderPending = false;
+            return;
+        }
+
+        var sortedNames = Object.keys(memberDurations).slice().sort(function(a, b) {
+            return memberDurations[b] - memberDurations[a];
+        });
+
+        // Cek apakah urutan saat ini sama dengan urutan baru
+        var currentOrder = [];
+        for (var i = 0; i < rows.length; i++) {
+            currentOrder.push(rows[i].dataset.name);
+        }
+        var same = true;
+        if (currentOrder.length === sortedNames.length) {
+            for (var j = 0; j < sortedNames.length; j++) {
+                if (currentOrder[j] !== sortedNames[j]) {
+                    same = false;
+                    break;
+                }
+            }
+        } else {
+            same = false;
+        }
+        if (same) {
+            _pressReorderPending = false;
+            return;
+        }
+
+        // ── FLIP: catat posisi awal ──
+        var firstRects = {};
+        for (var k = 0; k < rows.length; k++) {
+            firstRects[rows[k].dataset.name] = rows[k].getBoundingClientRect();
+        }
+
+        // ── Reorder DOM ──
+        for (var l = 0; l < sortedNames.length; l++) {
+            var n = sortedNames[l];
+            var row = null;
+            for (var m = 0; m < rows.length; m++) {
+                if (rows[m].dataset.name === n) {
+                    row = rows[m];
+                    break;
+                }
+            }
+            if (row) container.appendChild(row);
+        }
+
+        // ── FLIP: animasi ──
+        for (var o = 0; o < sortedNames.length; o++) {
+            var name = sortedNames[o];
+            var row2 = null;
+            for (var p = 0; p < rows.length; p++) {
+                if (rows[p].dataset.name === name) {
+                    row2 = rows[p];
+                    break;
+                }
+            }
+            if (!row2) continue;
+            var first = firstRects[name];
+            var last = row2.getBoundingClientRect();
+            if (!first) continue;
+            var dy = first.top - last.top;
+            if (Math.abs(dy) < 1) continue;
+
+            row2.style.transition = 'transform 0s';
+            row2.style.transform = 'translateY(' + dy + 'px)';
+
+            requestAnimationFrame(function(rowRef) {
+                return function() {
+                    requestAnimationFrame(function() {
+                        rowRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        rowRef.style.transform = '';
+                        // Reset style setelah animasi selesai
+                        setTimeout(function() {
+                            rowRef.style.transition = '';
+                            rowRef.style.transform = '';
+                        }, 600);
+                    });
+                };
+            }(row2));
+        }
+
+        // Reset flag setelah animasi selesai (600ms)
+        setTimeout(function() {
+            _pressReorderPending = false;
+        }, 600);
+    });
+}
+
+function pressId(prefix, name) { return prefix + name.replace(/[^a-zA-Z0-9]/g, '_'); }
+
 function renderPresentationBars() {
     var container = document.getElementById('pressBars');
     container.innerHTML = '';
@@ -1760,8 +1860,6 @@ function renderPresentationBars() {
         container.appendChild(row);
     }
 }
-
-function pressId(prefix, name) { return prefix + name.replace(/[^a-zA-Z0-9]/g, '_'); }
 
 function updatePresentationLive() {
     var overlay = document.getElementById('presentationOverlay');
@@ -1808,75 +1906,21 @@ function updatePresentationLive() {
         }
     }
 
-    // ── REORDER PRESENTASI (LANGSUNG, SEPERTI MODE NORMAL) ──
-    reorderPresentationBars();
-}
-
-function reorderPresentationBars() {
-    if (_pressReorderPending) return;
-    _pressReorderPending = true;
-    requestAnimationFrame(function() {
-        _pressReorderPending = false;
-        var container = document.getElementById('pressBars');
-        var rows = container ? container.children : [];
-        if (rows.length === 0) return;
-
-        var sortedNames = Object.keys(memberDurations).slice().sort(function(a, b) { return memberDurations[b] - memberDurations[a]; });
-
-        var currentOrder = [];
-        for (var i = 0; i < rows.length; i++) {
-            currentOrder.push(rows[i].dataset.name);
-        }
-        var same = true;
-        if (currentOrder.length === sortedNames.length) {
-            for (var j = 0; j < sortedNames.length; j++) {
-                if (currentOrder[j] !== sortedNames[j]) { same = false; break; }
-            }
-        } else {
-            same = false;
-        }
-        if (same) return;
-
-        var firstRects = {};
-        for (var k = 0; k < rows.length; k++) {
-            firstRects[rows[k].dataset.name] = rows[k].getBoundingClientRect();
-        }
-
-        for (var l = 0; l < sortedNames.length; l++) {
-            var n = sortedNames[l];
-            var row = null;
-            for (var m = 0; m < rows.length; m++) {
-                if (rows[m].dataset.name === n) { row = rows[m]; break; }
-            }
-            if (row) container.appendChild(row);
-        }
-
-        for (var o = 0; o < sortedNames.length; o++) {
-            var name = sortedNames[o];
-            var row2 = null;
-            for (var p = 0; p < rows.length; p++) {
-                if (rows[p].dataset.name === name) { row2 = rows[p]; break; }
-            }
-            if (!row2) continue;
-            var first = firstRects[name];
-            var last = row2.getBoundingClientRect();
-            if (!first) continue;
-            var dy = first.top - last.top;
-            if (Math.abs(dy) < 1) continue;
-            row2.style.transition = 'transform 0s';
-            row2.style.transform = 'translateY(' + dy + 'px)';
-            requestAnimationFrame(function(rowRef) {
-                return function() {
-                    requestAnimationFrame(function() {
-                        rowRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                        rowRef.style.transform = '';
-                        setTimeout(function() { rowRef.style.transition = '';
-                            rowRef.style.transform = ''; }, 600);
-                    });
-                };
-            }(row2));
-        }
+    // ── Cek apakah urutan perlu di-reorder ──
+    var curRows = container.children;
+    var curOrder = [];
+    for (var ci = 0; ci < curRows.length; ci++) {
+        curOrder.push(curRows[ci].dataset.name);
+    }
+    var newOrder = Object.keys(memberDurations).slice().sort(function(a, b) {
+        return memberDurations[b] - memberDurations[a];
     });
+    var needReorder = (curOrder.length !== newOrder.length) || curOrder.some(function(name, idx) {
+        return name !== newOrder[idx];
+    });
+    if (needReorder) {
+        reorderPresentationBars();
+    }
 }
 
 // ══════════════════════════════════════════
