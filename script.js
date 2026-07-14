@@ -98,6 +98,16 @@ var memberPhotos = {};
 var memberIntervals = {};
 var chartInstance = null;
 
+// ── FITUR BARU ──
+var memberStartTime = {};       // untuk timeline sync
+var timelineData = [];          // menyimpan segmen per member
+var autoSaveInterval = null;
+var lastTapTime = {};           // untuk deteksi double tap pada ad-libs
+var historyStack = [];          // untuk undo/redo
+var historyIndex = -1;
+var _reorderPending = false;
+var _avatarState = {};
+
 // ══════════════════════════════════════════
 //  TOAST & CONFIRM & PROMPT
 // ══════════════════════════════════════════
@@ -226,7 +236,7 @@ function renderStripItem(n, c, p, index) {
     var adLabel = index < 10 ? 'QWERTYUIOP'[index] : '';
     var keyBadge = keyLabel !== '' ? '<span class="strip-key">' + keyLabel + '</span>' : '';
     var adBadge = adLabel !== '' ? '<span class="strip-ad-key">' + adLabel + '</span>' : '';
-    var tooltip = index < 10 ? 'Hold [' + (keyLabel || '0') + '] · Ad-Lib [' + adLabel + ']' : 'Hold to record';
+    var tooltip = index < 10 ? 'Hold [' + (keyLabel || '0') + '] · Tap [' + adLabel + '] Ad-Lib' : 'Hold to record';
     item.title = tooltip;
     item.innerHTML = '\n        <div class="strip-avatar-wrap" id="sav-' + CSS.escape(n) + '">\n            <img src="' + p + '" class="strip-avatar" onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            ' + keyBadge + '\n            ' + adBadge + '\n        </div>\n        <div class="strip-name">' + n + '</div>\n        <div class="strip-time" id="strip-time-' + CSS.escape(n) + '">' + (memberDurations[n] || 0).toFixed(1) + 's</div>\n        <div class="strip-tooltip">' + tooltip + '</div>';
     memberStrip.appendChild(item);
@@ -253,17 +263,19 @@ function renderStripItem(n, c, p, index) {
         rippleInterval = setInterval(spawnRipple, 550);
         var startTime = Date.now();
         var startDuration = memberDurations[n] || 0;
+        // SIMPAN TIMESTAMP UNTUK TIMELINE
+        memberStartTime[n] = getCurrentPlayerTime();
         memberIntervals[n] = setInterval(function() {
             var elapsed = (Date.now() - startTime) / 1000;
             memberDurations[n] = startDuration + elapsed;
             timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
-            // Update semua visual
             updateLeaderboardLive();
             updateTotalDuration();
             updatePresentationLive();
-            // Panggil reorder setiap kali durasi berubah (dibatasi dengan flag)
             reorderLeaderboard();
         }, 50);
+        // Save state untuk undo
+        saveStateForUndo();
     }
 
     function stopHold() {
@@ -273,16 +285,29 @@ function renderStripItem(n, c, p, index) {
         clearInterval(rippleInterval);
         rippleInterval = null;
         item.classList.remove('holding');
+        // Simpan segmen timeline
+        var endTime = getCurrentPlayerTime();
+        var start = memberStartTime[n] || 0;
+        var dur = memberDurations[n] || 0;
+        if (dur > 0.1) {
+            timelineData.push({
+                member: n,
+                start: start,
+                end: endTime,
+                duration: dur
+            });
+        }
         updateLeaderboardLive();
         reorderLeaderboard();
         updatePresentationLive();
+        saveStateForUndo();
     }
 
     item.addEventListener('mousedown', startHold);
     item.addEventListener('mouseup', stopHold);
     item.addEventListener('mouseleave', stopHold);
     item.addEventListener('touchstart', function(e) { e.preventDefault();
-        startHold(); }, { passive: false });
+        startHold(); if (navigator.vibrate) navigator.vibrate(8); }, { passive: false });
     item.addEventListener('touchend', function(e) { e.preventDefault();
         stopHold(); }, { passive: false });
     item.addEventListener('touchcancel', stopHold);
@@ -341,9 +366,6 @@ function applyRankStyles() {
 // ══════════════════════════════════════════
 //  UPDATE LEADERBOARD
 // ══════════════════════════════════════════
-var _avatarState = {};
-var _reorderPending = false;
-
 function updateLeaderboardLive() {
     var all = document.querySelectorAll('.member-card');
     var currentMax = 0;
@@ -405,7 +427,6 @@ function reorderLeaderboard() {
 
         var sortedNames = Object.keys(memberDurations).slice().sort(function(a, b) { return memberDurations[b] - memberDurations[a]; });
 
-        // Cek apakah urutan saat ini sama dengan urutan baru
         var currentOrder = [];
         for (var i = 0; i < cards.length; i++) {
             currentOrder.push(cards[i].dataset.name);
@@ -506,6 +527,7 @@ function finalizeAddMember(n, color, photoUrl) {
     savePhotoCache();
     reloadMemberStrip();
     reloadMemberList();
+    saveStateForUndo();
     showToast('✅ ' + n + ' added');
 }
 
@@ -516,10 +538,12 @@ function resetMember(n) {
     memberDurations[n] = 0;
     reloadMemberStrip();
     reloadMemberList();
+    saveStateForUndo();
     showUndoToast('↺ Reset ' + n, function() {
         memberDurations[n] = prev;
         reloadMemberStrip();
         reloadMemberList();
+        saveStateForUndo();
         showToast('↩ Undo reset ' + n);
     });
 }
@@ -537,6 +561,7 @@ function deleteMember(n) {
     savePhotoCache();
     reloadMemberStrip();
     reloadMemberList();
+    saveStateForUndo();
     showToast('🗑 ' + n + ' deleted');
 }
 
@@ -550,8 +575,10 @@ function confirmResetAll() {
                     memberIntervals[n] = null; }
                 memberDurations[n] = 0;
             }
+            timelineData = [];
             reloadMemberStrip();
             reloadMemberList();
+            saveStateForUndo();
             showToast('↺ All durations reset');
         } });
 }
@@ -637,6 +664,7 @@ function applyEditFinal(oldName, newName, newColor, newPhoto) {
     closeEditModal();
     reloadMemberStrip();
     reloadMemberList();
+    saveStateForUndo();
     showToast('✅ ' + newName + ' updated');
 }
 
@@ -729,9 +757,11 @@ function loadSelectedPreset() {
             memberColors[m.name] = m.color || '#a78bfa';
             memberPhotos[m.name] = m.photo || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(m.name) + '&background=random';
         }
+        timelineData = [];
         savePhotoCache();
         reloadMemberStrip();
         reloadMemberList();
+        saveStateForUndo();
         showToast('✅ Preset "' + name + '" loaded');
     }
     var currentNames = Object.keys(memberDurations);
@@ -753,7 +783,7 @@ function deleteSelectedPreset() {
 }
 
 // ══════════════════════════════════════════
-//  5. MEDIA
+//  5. MEDIA + AUTO-DETECT LAGU
 // ══════════════════════════════════════════
 function loadLocalMedia(input) {
     var file = input.files[0];
@@ -776,7 +806,9 @@ function loadLocalMedia(input) {
         aud.style.display = 'block';
         aud.load();
         lbl.textContent = '🎵 ' + file.name;
-    } else { showToast('⚠️ Format tidak didukung'); }
+    } else { showToast('⚠️ Format tidak didukung'); return; }
+    // Auto-detect judul dari file
+    detectSongFromFile(file);
 }
 
 function loadVideo() {
@@ -791,10 +823,41 @@ function loadVideo() {
     yt.style.display = 'block';
     window._currentYtVideoId = v;
     if (window.ytPlayer) { window.ytPlayer.loadVideoById(v); } else { window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v }); }
+    // Auto-detect judul dari YouTube
+    detectSongFromYouTube(url);
+}
+
+// ── AUTO-DETECT FUNCTIONS ──
+function detectSongFromYouTube(url) {
+    fetch('https://noembed.com/embed?url=' + encodeURIComponent(url))
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data && data.title) {
+                document.getElementById('songTitle').value = data.title;
+            }
+        })
+        .catch(function() { /* silent fail */ });
+}
+
+function detectSongFromFile(file) {
+    if (file.type.indexOf('audio/') === 0 || file.type.indexOf('video/') === 0) {
+        var name = file.name.replace(/\.[^/.]+$/, "");
+        document.getElementById('songTitle').value = name;
+    }
+}
+
+// ── GET CURRENT PLAYER TIME ──
+function getCurrentPlayerTime() {
+    var vid = document.getElementById('localMedia');
+    var aud = document.getElementById('audioPlayer');
+    if (vid.style.display !== 'none' && vid.currentTime) return vid.currentTime;
+    if (aud.style.display !== 'none' && aud.currentTime) return aud.currentTime;
+    if (window.ytPlayer && window.ytPlayer.getCurrentTime) return window.ytPlayer.getCurrentTime();
+    return 0;
 }
 
 // ══════════════════════════════════════════
-//  6. FINISH & CHART
+//  6. FINISH + TIMELINE + CHART
 // ══════════════════════════════════════════
 function finish() {
     var names = Object.keys(memberDurations);
@@ -860,6 +923,65 @@ function finish() {
     });
     saveToHistory(title, sorted, memberDurations, memberColors, memberPhotos, total);
     document.getElementById('resultModal').style.display = 'flex';
+
+    // ── TAMBAHKAN VISUAL TIMELINE ──
+    setTimeout(function() {
+        var modalBox = document.querySelector('#resultModal .modal-box');
+        var existing = document.getElementById('timelineContainer');
+        if (existing) existing.remove();
+        var timelineContainer = document.createElement('div');
+        timelineContainer.id = 'timelineContainer';
+        timelineContainer.style.cssText = 'margin-top:20px; padding:10px 0;';
+        var label = document.createElement('p');
+        label.style.cssText = 'color:var(--text2);font-size:12px;margin-bottom:8px;';
+        label.textContent = '⏱ Timeline (saat member aktif)';
+        timelineContainer.appendChild(label);
+        var canvas = document.createElement('canvas');
+        canvas.width = 560;
+        canvas.height = 80;
+        canvas.style.cssText = 'width:100%; height:auto; background:var(--bg3); border-radius:8px;';
+        timelineContainer.appendChild(canvas);
+        modalBox.appendChild(timelineContainer);
+        var totalDuration = getCurrentPlayerTime() || 60;
+        drawTimeline(canvas, totalDuration);
+    }, 300);
+}
+
+function drawTimeline(canvas, totalDuration) {
+    var ctx = canvas.getContext('2d');
+    var w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    if (timelineData.length === 0) {
+        ctx.fillStyle = '#5a5680';
+        ctx.font = '12px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText('No timeline data', w/2, 40);
+        return;
+    }
+    timelineData.sort(function(a, b) { return a.start - b.start; });
+    var padding = 10;
+    var barHeight = 24;
+    var y = (h - barHeight) / 2;
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fillRect(padding, y, w - padding*2, barHeight);
+    for (var j = 0; j < timelineData.length; j++) {
+        var seg = timelineData[j];
+        var startX = padding + (seg.start / totalDuration) * (w - padding*2);
+        var endX = padding + (seg.end / totalDuration) * (w - padding*2);
+        var width = Math.max(endX - startX, 2);
+        ctx.fillStyle = memberColors[seg.member] || '#a78bfa';
+        ctx.shadowColor = memberColors[seg.member] || '#a78bfa';
+        ctx.shadowBlur = 6;
+        ctx.fillRect(startX, y, width, barHeight);
+        ctx.shadowBlur = 0;
+        if (width > 30) {
+            ctx.fillStyle = '#fff';
+            ctx.font = '9px Inter';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(seg.member, startX + width/2, y - 4);
+        }
+    }
 }
 
 function closeResultModal() { document.getElementById('resultModal').style.display = 'none'; }
@@ -1018,11 +1140,21 @@ function confirmClearHistory() {
 function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
 
 // ══════════════════════════════════════════
-//  8. KEYBOARD SHORTCUTS
+//  8. KEYBOARD SHORTCUTS (FITUR 4)
 // ══════════════════════════════════════════
 var activeKeyHolds = new Set();
+
 document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    // Ctrl+S = Save Preset
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        saveNewPreset();
+        return;
+    }
+
+    // Space = Play/Pause
     if (e.code === 'Space') {
         e.preventDefault();
         var vid = document.getElementById('localMedia');
@@ -1030,10 +1162,47 @@ document.addEventListener('keydown', function(e) {
         if (vid.style.display !== 'none') { vid.paused ? vid.play() : vid.pause(); } else if (aud.style.display !== 'none') { aud.paused ? aud.play() : aud.pause(); } else if (window.ytPlayer) { window.ytPlayer.getPlayerState() === 1 ? window.ytPlayer.pauseVideo() : window.ytPlayer.playVideo(); }
         return;
     }
+
+    // SHORTCUTS
+    switch(e.key.toLowerCase()) {
+        case 'z':
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                undoAction();
+            }
+            break;
+        case 'r':
+            confirmResetAll();
+            break;
+        case 'f':
+            finish();
+            break;
+        case 'p':
+            openPresentation();
+            break;
+        case 'e':
+            exportData();
+            break;
+        case 'h':
+            openHistory();
+            break;
+        case 'n':
+            document.getElementById('memberName').focus();
+            break;
+        case 'escape':
+            var modals = document.querySelectorAll('.modal-overlay[style*="display: flex"]');
+            for (var i = 0; i < modals.length; i++) {
+                modals[i].style.display = 'none';
+            }
+            break;
+    }
+
+    // Hold 1-9, 0
     var idx = parseInt(e.key) - 1;
     if (e.key === '0') idx = 9;
     if (isNaN(idx) || idx < 0 || idx > 9) {
-        handleAdLibKeyDown(e);
+        // Ad-libs tap (Q-P) — FITUR 5
+        handleAdLibTap(e);
         return;
     }
     if (activeKeyHolds.has(idx)) return;
@@ -1043,12 +1212,12 @@ document.addEventListener('keydown', function(e) {
     activeKeyHolds.add(idx);
     item.dispatchEvent(new MouseEvent('mousedown'));
 });
+
 document.addEventListener('keyup', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     var idx = parseInt(e.key) - 1;
     if (e.key === '0') idx = 9;
     if (isNaN(idx) || idx < 0 || idx > 9) {
-        handleAdLibKeyUp(e);
         return;
     }
     activeKeyHolds.delete(idx);
@@ -1057,6 +1226,7 @@ document.addEventListener('keyup', function(e) {
     if (!item) return;
     item.dispatchEvent(new MouseEvent('mouseup'));
 });
+
 window.addEventListener('blur', function() {
     activeKeyHolds.forEach(function(idx) {
         var items = document.querySelectorAll('.strip-item');
@@ -1064,121 +1234,155 @@ window.addEventListener('blur', function() {
         if (item) item.dispatchEvent(new MouseEvent('mouseup'));
     });
     activeKeyHolds.clear();
-    activeAdLibKeys.forEach(function(idx) { clearAdLib(idx); });
-    activeAdLibKeys.clear();
 });
 
 // ══════════════════════════════════════════
-//  AD-LIBS (Q-P) — interval 50ms, increment 0.05
+//  AD-LIBS TAP (FITUR 5)
 // ══════════════════════════════════════════
 var AD_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
-var activeAdLibKeys = new Set();
-var adLibIntervals = {};
 
-function addAdLibTime(memberName, amount) {
-    if (amount === undefined) amount = 0.05;
-    if (!memberDurations[memberName]) return;
-    memberDurations[memberName] = (memberDurations[memberName] || 0) + amount;
-    var timeLabel = document.getElementById('strip-time-' + CSS.escape(memberName));
-    if (timeLabel) timeLabel.textContent = memberDurations[memberName].toFixed(1) + 's';
-    updateLeaderboardLive();
-    updateTotalDuration();
-    updatePresentationLive();
-    reorderLeaderboard();
-    var overlay = document.getElementById('presentationOverlay');
-    if (overlay.style.display !== 'none') {
-        renderPresentationBars();
-    }
-}
-
-function handleAdLibKeyDown(e) {
+function handleAdLibTap(e) {
     var key = e.key.toUpperCase();
     var idx = AD_KEYS.indexOf(key);
     if (idx < 0) return;
-    if (activeAdLibKeys.has(idx)) return;
     var items = document.querySelectorAll('.strip-item');
     var item = items[idx];
     if (!item) return;
     var n = item.dataset.name;
     if (!n) return;
-    activeAdLibKeys.add(idx);
-    startAdLib(idx, item);
-    if (adLibIntervals[idx]) clearInterval(adLibIntervals[idx]);
-    adLibIntervals[idx] = setInterval(function() {
-        addAdLibTime(n, 0.05);
-    }, 50);
-}
 
-function handleAdLibKeyUp(e) {
-    var key = e.key.toUpperCase();
-    var idx = AD_KEYS.indexOf(key);
-    if (idx < 0) return;
-    activeAdLibKeys.delete(idx);
-    clearAdLib(idx);
-    if (adLibIntervals[idx]) {
-        clearInterval(adLibIntervals[idx]);
-        delete adLibIntervals[idx];
-    }
-}
+    var now = Date.now();
+    var last = lastTapTime[idx] || 0;
+    var isDouble = (now - last) < 300;
+    var amount = isDouble ? 0.3 : 0.1;
+    lastTapTime[idx] = now;
 
-function startAdLib(idx, item) {
+    memberDurations[n] = (memberDurations[n] || 0) + amount;
+    var timeLabel = document.getElementById('strip-time-' + CSS.escape(n));
+    if (timeLabel) timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
+    updateLeaderboardLive();
+    updateTotalDuration();
+    updatePresentationLive();
+    reorderLeaderboard();
+    saveStateForUndo();
+
+    // Efek visual ad-lib
     item.classList.add('adlib-active');
-    var wrap = item.querySelector('.strip-avatar-wrap');
-    if (wrap) wrap.classList.add('adlib-glow');
-    var n = item.dataset.name;
-    var cards = document.querySelectorAll('.member-card');
-    var card = null;
-    for (var i = 0; i < cards.length; i++) {
-        if (cards[i].dataset.name === n) { card = cards[i]; break; }
-    }
-    if (card) {
-        card.classList.add('adlib-card');
-        var avatar = card.querySelector('.member-avatar');
-        if (avatar) {
-            avatar.style.borderColor = '#4ade80';
-            avatar.style.boxShadow = '0 0 20px 6px rgba(74,222,128,0.6)';
-        }
-        var bar = card.querySelector('.member-bar');
-        if (bar) {
-            bar.style.background = 'linear-gradient(90deg, #4ade80, #22d3ee)';
-            bar.style.boxShadow = '0 0 12px #4ade80';
-        }
+    clearTimeout(item._adlibTimer);
+    item._adlibTimer = setTimeout(function() {
+        item.classList.remove('adlib-active');
+    }, 300);
+
+    // Haptic feedback
+    if (navigator.vibrate) navigator.vibrate(10);
+}
+
+// ══════════════════════════════════════════
+//  UNDO/REDO (FITUR 4)
+// ══════════════════════════════════════════
+function saveStateForUndo() {
+    var state = {
+        durations: JSON.parse(JSON.stringify(memberDurations)),
+        colors: JSON.parse(JSON.stringify(memberColors)),
+        photos: JSON.parse(JSON.stringify(memberPhotos))
+    };
+    historyStack = historyStack.slice(0, historyIndex + 1);
+    historyStack.push(state);
+    historyIndex = historyStack.length - 1;
+    if (historyStack.length > 30) {
+        historyStack.shift();
+        historyIndex--;
     }
 }
 
-function clearAdLib(idx) {
-    var items = document.querySelectorAll('.strip-item');
-    var item = items[idx];
-    if (!item) return;
-    item.classList.remove('adlib-active');
-    var wrap = item.querySelector('.strip-avatar-wrap');
-    if (wrap) wrap.classList.remove('adlib-glow');
-    var n = item.dataset.name;
-    var cards = document.querySelectorAll('.member-card');
-    var card = null;
-    for (var i = 0; i < cards.length; i++) {
-        if (cards[i].dataset.name === n) { card = cards[i]; break; }
-    }
-    if (card) {
-        card.classList.remove('adlib-card');
-        var avatar = card.querySelector('.member-avatar');
-        if (avatar) {
-            avatar.style.borderColor = memberColors[n] || '#a78bfa';
-            avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
-        }
-        var bar = card.querySelector('.member-bar');
-        if (bar) {
-            var c = memberColors[n] || '#a78bfa';
-            bar.style.background = 'linear-gradient(90deg, ' + c + '88, ' + c + ')';
-            bar.style.boxShadow = '';
-        }
-    }
+function undoAction() {
+    if (historyIndex <= 0) { showToast('Nothing to undo'); return; }
+    historyIndex--;
+    restoreState(historyStack[historyIndex]);
+    showToast('↩ Undo');
 }
 
-// Tutup modal klik backdrop
-var modals = document.querySelectorAll('.modal-overlay');
-for (var mi = 0; mi < modals.length; mi++) {
-    modals[mi].addEventListener('click', function(e) { if (e.target === this) this.style.display = 'none'; });
+function redoAction() {
+    if (historyIndex >= historyStack.length - 1) { showToast('Nothing to redo'); return; }
+    historyIndex++;
+    restoreState(historyStack[historyIndex]);
+    showToast('↪ Redo');
+}
+
+function restoreState(state) {
+    memberDurations = state.durations;
+    memberColors = state.colors;
+    memberPhotos = state.photos;
+    reloadMemberStrip();
+    reloadMemberList();
+    updateTotalDuration();
+    updateLeaderboardLive();
+    saveAutoState();
+}
+
+// ══════════════════════════════════════════
+//  EXPORT DATA (FITUR 4)
+// ══════════════════════════════════════════
+function exportData() {
+    var names = Object.keys(memberDurations);
+    if (names.length === 0) { showToast('No data to export'); return; }
+    var total = 0;
+    for (var i = 0; i < names.length; i++) {
+        total += memberDurations[names[i]];
+    }
+    var csv = 'Member,Duration (s),Percentage\n';
+    var sorted = names.slice().sort(function(a, b) { return memberDurations[b] - memberDurations[a]; });
+    for (var j = 0; j < sorted.length; j++) {
+        var n = sorted[j];
+        var pct = ((memberDurations[n] / total) * 100).toFixed(1);
+        csv += n + ',' + memberDurations[n].toFixed(1) + ',' + pct + '%\n';
+    }
+    var blob = new Blob([csv], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'line-distribution.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('📊 Exported CSV');
+}
+
+// ══════════════════════════════════════════
+//  AUTO-SAVE (FITUR 9)
+// ══════════════════════════════════════════
+function saveAutoState() {
+    var data = {
+        durations: memberDurations,
+        colors: memberColors,
+        photos: memberPhotos,
+        songTitle: document.getElementById('songTitle').value,
+        timestamp: Date.now()
+    };
+    localStorage.setItem('linedistro_autosave', JSON.stringify(data));
+}
+
+function loadAutoState() {
+    var raw = localStorage.getItem('linedistro_autosave');
+    if (!raw) return false;
+    try {
+        var data = JSON.parse(raw);
+        if (Date.now() - data.timestamp > 86400000) {
+            localStorage.removeItem('linedistro_autosave');
+            return false;
+        }
+        memberDurations = data.durations || {};
+        memberColors = data.colors || {};
+        memberPhotos = data.photos || {};
+        document.getElementById('songTitle').value = data.songTitle || '';
+        return true;
+    } catch (e) { return false; }
+}
+
+function startAutoSave() {
+    if (autoSaveInterval) clearInterval(autoSaveInterval);
+    autoSaveInterval = setInterval(saveAutoState, 10000);
 }
 
 // ══════════════════════════════════════════
@@ -1402,6 +1606,21 @@ window.onload = function() {
     refreshPresetDropdown();
     reloadMemberStrip();
     reloadMemberList();
+
+    // Auto-load autosave
+    var hasAuto = loadAutoState();
+    if (hasAuto) {
+        showToast('🔄 Auto-save restored');
+        reloadMemberStrip();
+        reloadMemberList();
+        updateTotalDuration();
+    }
+
+    // Mulai auto-save
+    startAutoSave();
+
+    // Simpan state awal untuk undo
+    saveStateForUndo();
 
     var saveEditBtn = document.querySelector('#editModal .btn-primary');
     if (saveEditBtn) {
