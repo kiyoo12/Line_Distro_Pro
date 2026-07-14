@@ -767,10 +767,15 @@ button, .file-btn {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 4px;
-    flex-direction: row-reverse;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
 }
-.modal-topbar h3 { text-align: right; }
+.modal-topbar h3 {
+    margin: 0;
+    text-align: left;
+    font-size: 18px;
+}
 
 .edit-color-row {
     display: flex;
