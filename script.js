@@ -1206,8 +1206,8 @@ document.addEventListener('keydown', function(e) {
         case 'p':
             openPresentation();
             break;
-        case 'e':
-            exportData();
+        case 'x':
+    exportData();
             break;
         case 'h':
             openHistory();
