@@ -100,7 +100,8 @@
 
 <!-- Confirm generik -->
 <div id="confirmModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box">
+    <div class="modal-box" style="position:relative;">
+        <button class="modal-close" onclick="closeConfirm()">✕</button>
         <p class="modal-icon" id="confirmIcon">⚠️</p>
         <h3 id="confirmTitle">Confirm</h3>
         <p id="confirmMsg" class="modal-sub"></p>
@@ -116,7 +117,8 @@
 
 <!-- Input nama preset -->
 <div id="promptModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box">
+    <div class="modal-box" style="position:relative;">
+        <button class="modal-close" onclick="closePrompt()">✕</button>
         <p class="modal-icon">💾</p>
         <h3 id="promptTitle">Save Preset</h3>
         <p class="modal-sub" id="promptSub">Enter a name for this preset.</p>
@@ -130,7 +132,8 @@
 
 <!-- Edit Member -->
 <div id="editModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box">
+    <div class="modal-box" style="position:relative;">
+        <button class="modal-close" onclick="closeEditModal()">✕</button>
         <p class="modal-icon">✏️</p>
         <h3>Edit Member</h3>
         <p class="modal-sub">Select a member to edit.</p>
@@ -155,7 +158,8 @@
 
 <!-- Results -->
 <div id="resultModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box modal-wide">
+    <div class="modal-box modal-wide" style="position:relative;">
+        <button class="modal-close" onclick="closeResultModal()">✕</button>
         <p class="modal-icon">✦</p>
         <h3 id="resultSongTitle">Results</h3>
         <p class="modal-sub" id="resultDateLabel"></p>
@@ -167,7 +171,8 @@
 
 <!-- Riwayat -->
 <div id="historyModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box modal-wide">
+    <div class="modal-box modal-wide" style="position:relative;">
+        <button class="modal-close" onclick="closeHistoryModal()">✕</button>
         <div class="modal-topbar">
             <button class="btn-danger-soft" onclick="confirmClearHistory()">🗑 Clear All</button>
             <h3>📋 History</h3>
@@ -197,7 +202,8 @@
 
 <!-- Member Stats Modal -->
 <div id="memberStatsModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box modal-wide">
+    <div class="modal-box modal-wide" style="position:relative;">
+        <button class="modal-close" onclick="closeMemberStatsModal()">✕</button>
         <h3 id="statsModalTitle">📈 Stats</h3>
         <p class="modal-sub">Performance across all recorded songs. Click any member in history to view.</p>
         <canvas id="memberStatsChart" style="margin-top:16px; max-height:280px;"></canvas>
