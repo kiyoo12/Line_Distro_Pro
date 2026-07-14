@@ -1336,13 +1336,13 @@ document.addEventListener('keydown', function(e) {
                 undoAction();
             }
             break;
-        case 'r':
+        case 'a':
             confirmResetAll();
             break;
         case 'f':
             finish();
             break;
-        case 'p':
+        case 'l':
             openPresentation();
             break;
         case 'x':
