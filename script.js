@@ -98,11 +98,11 @@ var memberPhotos = {};
 var memberIntervals = {};
 var chartInstance = null;
 
-// ── FITUR BARU ──
-var memberStartTime = {};       // untuk timeline sync
-var timelineData = [];          // menyimpan segmen per member
+// ── FITUR ──
+var memberStartTime = {};
+var timelineData = [];
 var autoSaveInterval = null;
-var historyStack = [];          // untuk undo/redo
+var historyStack = [];
 var historyIndex = -1;
 var _reorderPending = false;
 var _avatarState = {};
@@ -784,8 +784,11 @@ function deleteSelectedPreset() {
 }
 
 // ══════════════════════════════════════════
-//  5. MEDIA + AUTO-DETECT LAGU
+//  5. MEDIA + AUTO-DETECT LAGU + YOUTUBE RETRY
 // ══════════════════════════════════════════
+var _ytRetryCount = 0;
+var _ytRetryMax = 3;
+
 function loadLocalMedia(input) {
     var file = input.files[0];
     if (!file) return;
@@ -822,8 +825,57 @@ function loadVideo() {
     var yt = document.getElementById('player');
     yt.style.display = 'block';
     window._currentYtVideoId = v;
-    if (window.ytPlayer) { window.ytPlayer.loadVideoById(v); } else { window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v }); }
+    _ytRetryCount = 0;
+    loadYoutubeVideo(v);
     detectSongFromYouTube(url);
+}
+
+function loadYoutubeVideo(videoId) {
+    if (window.ytPlayer) {
+        try {
+            window.ytPlayer.loadVideoById(videoId);
+        } catch (e) {
+            console.warn('YouTube load error, retrying...', e);
+            retryYoutubeLoad(videoId);
+        }
+    } else {
+        // Tunggu API siap
+        if (typeof YT !== 'undefined' && YT.Player) {
+            window.ytPlayer = new YT.Player('player', {
+                height: '315',
+                width: '100%',
+                videoId: videoId,
+                events: {
+                    onError: function() { retryYoutubeLoad(videoId); }
+                }
+            });
+        } else {
+            // API belum load, tunggu 500ms
+            setTimeout(function() {
+                loadYoutubeVideo(videoId);
+            }, 500);
+        }
+    }
+}
+
+function retryYoutubeLoad(videoId) {
+    _ytRetryCount++;
+    if (_ytRetryCount > _ytRetryMax) {
+        showToast('⚠️ YouTube video failed to load. Please refresh and try again.');
+        return;
+    }
+    showToast('🔄 Retrying YouTube load... (' + _ytRetryCount + '/' + _ytRetryMax + ')');
+    setTimeout(function() {
+        if (window.ytPlayer) {
+            try {
+                window.ytPlayer.loadVideoById(videoId);
+            } catch (e) {
+                retryYoutubeLoad(videoId);
+            }
+        } else {
+            loadYoutubeVideo(videoId);
+        }
+    }, 1000);
 }
 
 function detectSongFromYouTube(url) {
@@ -854,7 +906,7 @@ function getCurrentPlayerTime() {
 }
 
 // ══════════════════════════════════════════
-//  KEADILAN PEMBAGIAN LINE (Gini Coefficient)
+//  KEADILAN PEMBAGIAN LINE (Gini Coefficient) — ENGLISH
 // ══════════════════════════════════════════
 function calculateFairness(durations) {
     var values = [];
@@ -879,7 +931,7 @@ function calculateFairness(durations) {
 }
 
 // ══════════════════════════════════════════
-//  6. FINISH + TIMELINE + CHART + KEADILAN
+//  6. FINISH + RESET + TIMELINE + CHART + KEADILAN (ENGLISH)
 // ══════════════════════════════════════════
 function finish() {
     var names = Object.keys(memberDurations);
@@ -914,10 +966,10 @@ function finish() {
         lb.appendChild(item);
     }
 
-    // ── KEADILAN ──
+    // ── KEADILAN (ENGLISH) ──
     var fairness = calculateFairness(memberDurations);
     var fairnessHtml = '<div style="margin-top:14px;padding:12px 16px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;">';
-    fairnessHtml += '<span style="color:var(--text2);font-size:13px;">⚖️ Keadilan Pembagian Line</span>';
+    fairnessHtml += '<span style="color:var(--text2);font-size:13px;">⚖️ Line Distribution Fairness</span>';
     var color = fairness.fairness > 70 ? '#4ade80' : fairness.fairness > 40 ? '#fbbf24' : '#f87171';
     fairnessHtml += '<span style="font-weight:700;font-size:20px;color:' + color + ';">' + fairness.fairness.toFixed(1) + '%</span>';
     fairnessHtml += '<span style="color:var(--text3);font-size:11px;margin-left:8px;">(Gini: ' + fairness.gini.toFixed(3) + ')</span>';
@@ -967,7 +1019,7 @@ function finish() {
         timelineContainer.style.cssText = 'margin-top:20px; padding:10px 0;';
         var label = document.createElement('p');
         label.style.cssText = 'color:var(--text2);font-size:12px;margin-bottom:8px;';
-        label.textContent = '⏱ Timeline (saat member aktif)';
+        label.textContent = '⏱ Timeline (member active)';
         timelineContainer.appendChild(label);
         var canvas = document.createElement('canvas');
         canvas.width = 560;
@@ -978,6 +1030,23 @@ function finish() {
         var totalDuration = getCurrentPlayerTime() || 60;
         drawTimeline(canvas, totalDuration);
     }, 300);
+
+    // ── RESET SEMUA TIMESTAMP SETELAH FINISH ──
+    resetAllTimestamps();
+}
+
+function resetAllTimestamps() {
+    var names = Object.keys(memberDurations);
+    for (var i = 0; i < names.length; i++) {
+        var n = names[i];
+        if (memberIntervals[n]) { clearInterval(memberIntervals[n]);
+            memberIntervals[n] = null; }
+        memberDurations[n] = 0;
+    }
+    timelineData = [];
+    reloadMemberStrip();
+    reloadMemberList();
+    showToast('🔄 All timestamps reset');
 }
 
 function drawTimeline(canvas, totalDuration) {
@@ -1020,7 +1089,7 @@ function drawTimeline(canvas, totalDuration) {
 function closeResultModal() { document.getElementById('resultModal').style.display = 'none'; }
 
 // ══════════════════════════════════════════
-//  7. HISTORY
+//  7. HISTORY — delete button always visible
 // ══════════════════════════════════════════
 function getHistory() {
     try {
@@ -1141,7 +1210,8 @@ function openHistory() {
                 var member = entry.members[k];
                 membersHtml += '\n                            <div class="rank-item" style="border-left-color:' + member.color + '; cursor:pointer;" onclick="openMemberStats(\'' + member.name.replace(/'/g, "\\'") + '\')">\n                                <div class="rank-name">\n                                    <img src="' + member.photo + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;"\n                                         onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(member.name) + '\'">\n                                    <span class="rank-badge">' + (k + 1) + '</span>\n                                    <span>' + member.name + '</span>\n                                </div>\n                                <div class="rank-meta">\n                                    <span class="rank-time">' + member.duration.toFixed(1) + 's</span>\n                                    <span class="rank-pct">' + member.pct + '%</span>\n                                    <span style="color:var(--text3);font-size:11px;margin-left:4px;">📈</span>\n                                </div>\n                            </div>';
             }
-            card.innerHTML = '\n                <div class="history-card-header" onclick="toggleHistoryDetail(' + entry.id + ')">\n                    <div>\n                        <div class="history-card-title">🎵 ' + entry.title + '</div>\n                        <div class="history-card-meta">' + entry.date + ' · Total ' + entry.totalDuration.toFixed(1) + 's</div>\n                    </div>\n                    <div style="display:flex;align-items:center;gap:6px;">\n                        <div class="history-avatars">\n                            ' + avatarsHtml + '\n                            ' + moreHtml + '\n                        </div>\n                        <span class="history-chevron" id="chev-' + entry.id + '">▾</span>\n                    </div>\n                </div>\n                <div class="history-detail" id="detail-' + entry.id + '">\n                    <div style="padding-top:10px; display:flex; flex-direction:column; gap:6px;">\n                        ' + membersHtml + '\n                    </div>\n                    <button class="btn-danger-soft" style="width:100%;justify-content:center;margin-top:10px;"\n                            onclick="confirmDeleteHistoryEntry(' + entry.id + ')">🗑 Delete Entry</button>\n                </div>';
+            // ── DELETE BUTTON SELALU TERLIHAT ──
+            card.innerHTML = '\n                <div class="history-card-header" onclick="toggleHistoryDetail(' + entry.id + ')">\n                    <div>\n                        <div class="history-card-title">🎵 ' + entry.title + '</div>\n                        <div class="history-card-meta">' + entry.date + ' · Total ' + entry.totalDuration.toFixed(1) + 's</div>\n                    </div>\n                    <div style="display:flex;align-items:center;gap:6px;">\n                        <div class="history-avatars">\n                            ' + avatarsHtml + '\n                            ' + moreHtml + '\n                        </div>\n                        <span class="history-chevron" id="chev-' + entry.id + '">▾</span>\n                    </div>\n                </div>\n                <div class="history-detail" id="detail-' + entry.id + '">\n                    <div style="padding-top:10px; display:flex; flex-direction:column; gap:6px;">\n                        ' + membersHtml + '\n                    </div>\n                </div>\n                <div style="padding:8px 16px 14px; border-top:1px solid var(--border);">\n                    <button class="btn-danger-soft" style="width:100%;justify-content:center;"\n                            onclick="confirmDeleteHistoryEntry(' + entry.id + ')">🗑 Delete Entry</button>\n                </div>';
             container.appendChild(card);
         }
     }
@@ -1157,7 +1227,7 @@ function toggleHistoryDetail(id) {
 }
 
 function confirmDeleteHistoryEntry(id) {
-    showConfirm({ icon: '🗑', title: 'Delete riwayat ini?', msg: 'This recording data cannot be recovered.', okLabel: 'Delete', okClass: 'btn-danger', onOk: function() {
+    showConfirm({ icon: '🗑', title: 'Delete this entry?', msg: 'This recording data cannot be recovered.', okLabel: 'Delete', okClass: 'btn-danger', onOk: function() {
             saveHistory(getHistory().filter(function(e) { return e.id !== id; }));
             openHistory();
             showToast('🗑 History entry deleted');
@@ -1165,7 +1235,7 @@ function confirmDeleteHistoryEntry(id) {
 }
 
 function confirmClearHistory() {
-    showConfirm({ icon: '🗑', title: 'Delete semua riwayat?', msg: 'All recording history will be permanently deleted.', okLabel: 'Delete Semua', okClass: 'btn-danger', onOk: function() { saveHistory([]);
+    showConfirm({ icon: '🗑', title: 'Delete all history?', msg: 'All recording history will be permanently deleted.', okLabel: 'Delete All', okClass: 'btn-danger', onOk: function() { saveHistory([]);
             openHistory();
             showToast('🗑 All history cleared'); } });
 }
@@ -1180,14 +1250,12 @@ var activeKeyHolds = new Set();
 document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    // Ctrl+S = Save Preset
     if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
         saveNewPreset();
         return;
     }
 
-    // Space = Play/Pause
     if (e.code === 'Space') {
         e.preventDefault();
         var vid = document.getElementById('localMedia');
@@ -1196,7 +1264,6 @@ document.addEventListener('keydown', function(e) {
         return;
     }
 
-    // SHORTCUTS (E sudah diganti X untuk Export)
     switch(e.key.toLowerCase()) {
         case 'z':
             if (e.ctrlKey || e.metaKey) {
@@ -1230,11 +1297,9 @@ document.addEventListener('keydown', function(e) {
             break;
     }
 
-    // ── HOLD 1-9, 0 ──
     var idx = parseInt(e.key) - 1;
     if (e.key === '0') idx = 9;
     if (isNaN(idx) || idx < 0 || idx > 9) {
-        // ── AD-LIBS HOLD (Q-P) ──
         handleAdLibKeyDown(e);
         return;
     }
@@ -1248,11 +1313,9 @@ document.addEventListener('keydown', function(e) {
 
 document.addEventListener('keyup', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
     var idx = parseInt(e.key) - 1;
     if (e.key === '0') idx = 9;
     if (isNaN(idx) || idx < 0 || idx > 9) {
-        // AD-LIBS HOLD RELEASE
         handleAdLibKeyUp(e);
         return;
     }
@@ -1270,7 +1333,6 @@ window.addEventListener('blur', function() {
         if (item) item.dispatchEvent(new MouseEvent('mouseup'));
     });
     activeKeyHolds.clear();
-    // Lepas semua ad-libs
     activeAdLibKeys.forEach(function(idx) { clearAdLib(idx); });
     activeAdLibKeys.clear();
     for (var key in adLibIntervals) {
@@ -1705,9 +1767,15 @@ function updatePresentationLive() {
 }
 
 // ══════════════════════════════════════════
-//  10. INIT
+//  10. INIT — RESET MEMBER SAAT RELOAD
 // ══════════════════════════════════════════
 window.onload = function() {
+    // ── RESET DURASI AGAR TIDAK TERTINGGAL ──
+    memberDurations = {};
+    memberColors = {};
+    memberPhotos = {};
+    timelineData = [];
+
     loadPhotoCache();
     refreshPresetDropdown();
     reloadMemberStrip();
