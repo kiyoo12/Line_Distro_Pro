@@ -784,7 +784,7 @@ function deleteSelectedPreset() {
 }
 
 // ══════════════════════════════════════════
-//  5. MEDIA + AUTO-DETECT LAGU + YOUTUBE RETRY
+//  5. MEDIA + AUTO-DETECT + YOUTUBE RETRY
 // ══════════════════════════════════════════
 var _ytRetryCount = 0;
 var _ytRetryMax = 3;
@@ -839,7 +839,6 @@ function loadYoutubeVideo(videoId) {
             retryYoutubeLoad(videoId);
         }
     } else {
-        // Tunggu API siap
         if (typeof YT !== 'undefined' && YT.Player) {
             window.ytPlayer = new YT.Player('player', {
                 height: '315',
@@ -850,7 +849,6 @@ function loadYoutubeVideo(videoId) {
                 }
             });
         } else {
-            // API belum load, tunggu 500ms
             setTimeout(function() {
                 loadYoutubeVideo(videoId);
             }, 500);
@@ -906,7 +904,7 @@ function getCurrentPlayerTime() {
 }
 
 // ══════════════════════════════════════════
-//  KEADILAN PEMBAGIAN LINE (Gini Coefficient) — ENGLISH
+//  FAIRNESS (Gini Coefficient) — ENGLISH
 // ══════════════════════════════════════════
 function calculateFairness(durations) {
     var values = [];
@@ -931,7 +929,7 @@ function calculateFairness(durations) {
 }
 
 // ══════════════════════════════════════════
-//  6. FINISH + RESET + TIMELINE + CHART + KEADILAN (ENGLISH)
+//  6. FINISH + RESET + TIMELINE + CHART + FAIRNESS (ENGLISH)
 // ══════════════════════════════════════════
 function finish() {
     var names = Object.keys(memberDurations);
@@ -966,7 +964,7 @@ function finish() {
         lb.appendChild(item);
     }
 
-    // ── KEADILAN (ENGLISH) ──
+    // ── FAIRNESS (ENGLISH) ──
     var fairness = calculateFairness(memberDurations);
     var fairnessHtml = '<div style="margin-top:14px;padding:12px 16px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;">';
     fairnessHtml += '<span style="color:var(--text2);font-size:13px;">⚖️ Line Distribution Fairness</span>';
@@ -1031,7 +1029,7 @@ function finish() {
         drawTimeline(canvas, totalDuration);
     }, 300);
 
-    // ── RESET SEMUA TIMESTAMP SETELAH FINISH ──
+    // ── RESET ALL TIMESTAMPS AFTER FINISH ──
     resetAllTimestamps();
 }
 
@@ -1554,6 +1552,36 @@ function startAutoSave() {
 }
 
 // ══════════════════════════════════════════
+//  CLEAR ALL DATA
+// ══════════════════════════════════════════
+function clearAllData() {
+    showConfirm({
+        icon: '🗑',
+        title: 'Clear All Data?',
+        msg: 'This will delete ALL members, durations, timeline, and auto-save data. Presets and history will be kept.',
+        okLabel: 'Clear All',
+        okClass: 'btn-danger',
+        onOk: function() {
+            memberDurations = {};
+            memberColors = {};
+            memberPhotos = {};
+            memberIntervals = {};
+            memberStartTime = {};
+            timelineData = [];
+            localStorage.removeItem('linedistro_autosave');
+            localStorage.removeItem('linedistro_photos');
+            historyStack = [];
+            historyIndex = -1;
+            reloadMemberStrip();
+            reloadMemberList();
+            updateTotalDuration();
+            updateLeaderboardLive();
+            showToast('🗑 All data cleared successfully');
+        }
+    });
+}
+
+// ══════════════════════════════════════════
 //  9. PRESENTATION MODE
 // ══════════════════════════════════════════
 function openPresentation() {
@@ -1767,10 +1795,10 @@ function updatePresentationLive() {
 }
 
 // ══════════════════════════════════════════
-//  10. INIT — RESET MEMBER SAAT RELOAD
+//  10. INIT
 // ══════════════════════════════════════════
 window.onload = function() {
-    // ── RESET DURASI AGAR TIDAK TERTINGGAL ──
+    // Reset agar tidak ada member tersisa dari sesi sebelumnya (kecuali auto-save)
     memberDurations = {};
     memberColors = {};
     memberPhotos = {};
