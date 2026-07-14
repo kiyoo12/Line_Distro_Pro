@@ -106,6 +106,7 @@ var historyStack = [];
 var historyIndex = -1;
 var _reorderPending = false;
 var _avatarState = {};
+var _pressReorderPending = false; // untuk presentasi
 
 // ── AD-LIBS HOLD ──
 var activeAdLibKeys = new Set();
@@ -1697,8 +1698,6 @@ function openPresentation() {
 
 function closePresentation() {
     document.getElementById('presentationOverlay').style.display = 'none';
-    if (_pressReorderTimer) { clearTimeout(_pressReorderTimer);
-        _pressReorderTimer = null; }
     var pressVid = document.getElementById('pressBgVideo');
     if (pressVid) { pressVid.pause();
         pressVid.src = ''; }
@@ -1724,11 +1723,6 @@ function syncPresentationMedia() {
     }
     showToast('⏱ Synced');
 }
-
-var _pressReorderTimer = null;
-var _pressIsReordering = false;
-
-function pressId(prefix, name) { return prefix + name.replace(/[^a-zA-Z0-9]/g, '_'); }
 
 function renderPresentationBars() {
     var container = document.getElementById('pressBars');
@@ -1766,6 +1760,8 @@ function renderPresentationBars() {
         container.appendChild(row);
     }
 }
+
+function pressId(prefix, name) { return prefix + name.replace(/[^a-zA-Z0-9]/g, '_'); }
 
 function updatePresentationLive() {
     var overlay = document.getElementById('presentationOverlay');
@@ -1811,60 +1807,76 @@ function updatePresentationLive() {
             avatar.style.borderColor = isAdlib ? '#4ade80' : c;
         }
     }
-    if (_pressReorderTimer || _pressIsReordering) return;
-    _pressReorderTimer = setTimeout(function() {
-        _pressReorderTimer = null;
-        if (_pressIsReordering) return;
-        var curRows = container.children;
+
+    // ── REORDER PRESENTASI (LANGSUNG, SEPERTI MODE NORMAL) ──
+    reorderPresentationBars();
+}
+
+function reorderPresentationBars() {
+    if (_pressReorderPending) return;
+    _pressReorderPending = true;
+    requestAnimationFrame(function() {
+        _pressReorderPending = false;
+        var container = document.getElementById('pressBars');
+        var rows = container ? container.children : [];
+        if (rows.length === 0) return;
+
         var sortedNames = Object.keys(memberDurations).slice().sort(function(a, b) { return memberDurations[b] - memberDurations[a]; });
+
+        var currentOrder = [];
+        for (var i = 0; i < rows.length; i++) {
+            currentOrder.push(rows[i].dataset.name);
+        }
         var same = true;
-        for (var k = 0; k < sortedNames.length; k++) {
-            if (!curRows[k] || curRows[k].dataset.name !== sortedNames[k]) { same = false; break; }
+        if (currentOrder.length === sortedNames.length) {
+            for (var j = 0; j < sortedNames.length; j++) {
+                if (currentOrder[j] !== sortedNames[j]) { same = false; break; }
+            }
+        } else {
+            same = false;
         }
         if (same) return;
-        _pressIsReordering = true;
+
         var firstRects = {};
-        for (var l = 0; l < curRows.length; l++) {
-            firstRects[curRows[l].dataset.name] = curRows[l].getBoundingClientRect();
+        for (var k = 0; k < rows.length; k++) {
+            firstRects[rows[k].dataset.name] = rows[k].getBoundingClientRect();
         }
-        for (var m = 0; m < sortedNames.length; m++) {
-            var name = sortedNames[m];
-            var rowToMove = null;
-            for (var n2 = 0; n2 < curRows.length; n2++) {
-                if (curRows[n2].dataset.name === name) { rowToMove = curRows[n2]; break; }
+
+        for (var l = 0; l < sortedNames.length; l++) {
+            var n = sortedNames[l];
+            var row = null;
+            for (var m = 0; m < rows.length; m++) {
+                if (rows[m].dataset.name === n) { row = rows[m]; break; }
             }
-            if (rowToMove) container.appendChild(rowToMove);
+            if (row) container.appendChild(row);
         }
-        requestAnimationFrame(function() {
-            requestAnimationFrame(function() {
-                for (var o = 0; o < sortedNames.length; o++) {
-                    var name2 = sortedNames[o];
-                    var row2 = null;
-                    for (var p = 0; p < container.children.length; p++) {
-                        if (container.children[p].dataset.name === name2) { row2 = container.children[p]; break; }
-                    }
-                    var first = firstRects[name2];
-                    if (!row2 || !first) continue;
-                    var last = row2.getBoundingClientRect();
-                    var dy = first.top - last.top;
-                    if (Math.abs(dy) < 1) continue;
-                    row2.style.transition = 'transform 0s';
-                    row2.style.transform = 'translateY(' + dy + 'px)';
-                    requestAnimationFrame(function(rowRef) {
-                        return function() {
-                            requestAnimationFrame(function() {
-                                rowRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                                rowRef.style.transform = '';
-                                setTimeout(function() { rowRef.style.transition = '';
-                                    rowRef.style.transform = ''; }, 600);
-                            });
-                        };
-                    }(row2));
-                }
-                setTimeout(function() { _pressIsReordering = false; }, 600);
-            });
-        });
-    }, 600);
+
+        for (var o = 0; o < sortedNames.length; o++) {
+            var name = sortedNames[o];
+            var row2 = null;
+            for (var p = 0; p < rows.length; p++) {
+                if (rows[p].dataset.name === name) { row2 = rows[p]; break; }
+            }
+            if (!row2) continue;
+            var first = firstRects[name];
+            var last = row2.getBoundingClientRect();
+            if (!first) continue;
+            var dy = first.top - last.top;
+            if (Math.abs(dy) < 1) continue;
+            row2.style.transition = 'transform 0s';
+            row2.style.transform = 'translateY(' + dy + 'px)';
+            requestAnimationFrame(function(rowRef) {
+                return function() {
+                    requestAnimationFrame(function() {
+                        rowRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        rowRef.style.transform = '';
+                        setTimeout(function() { rowRef.style.transition = '';
+                            rowRef.style.transform = ''; }, 600);
+                    });
+                };
+            }(row2));
+        }
+    });
 }
 
 // ══════════════════════════════════════════
