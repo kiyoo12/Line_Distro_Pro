@@ -253,20 +253,16 @@ function renderStripItem(n, c, p, index) {
         rippleInterval = setInterval(spawnRipple, 550);
         var startTime = Date.now();
         var startDuration = memberDurations[n] || 0;
-        var lastReorder = Date.now();
         memberIntervals[n] = setInterval(function() {
             var elapsed = (Date.now() - startTime) / 1000;
             memberDurations[n] = startDuration + elapsed;
             timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
-            // Update semua visual langsung di sini
+            // Update semua visual
             updateLeaderboardLive();
             updateTotalDuration();
             updatePresentationLive();
-            // Reorder lebih sering (300ms) agar animasi naik lebih halus
-            if (Date.now() - lastReorder > 300) {
-                lastReorder = Date.now();
-                reorderLeaderboard();
-            }
+            // Panggil reorder setiap kali durasi berubah (dibatasi dengan flag)
+            reorderLeaderboard();
         }, 50);
     }
 
@@ -343,14 +339,13 @@ function applyRankStyles() {
 }
 
 // ══════════════════════════════════════════
-//  UPDATE LEADERBOARD — denominator = durasi tertinggi saat ini
+//  UPDATE LEADERBOARD
 // ══════════════════════════════════════════
 var _avatarState = {};
-var _lastOrder = []; // simpan urutan terakhir untuk menghindari reorder berlebihan
+var _reorderPending = false;
 
 function updateLeaderboardLive() {
     var all = document.querySelectorAll('.member-card');
-    // Cari durasi tertinggi saat ini
     var currentMax = 0;
     for (var i = 0; i < all.length; i++) {
         var val = memberDurations[all[i].dataset.name] || 0;
@@ -366,7 +361,6 @@ function updateLeaderboardLive() {
         var avatar = card.querySelector('.member-avatar');
         var isActive = !!memberIntervals[n];
 
-        // Animasi avatar (hold/release)
         if (isActive) {
             if (!card.classList.contains('is-active')) {
                 card.classList.add('is-active');
@@ -392,7 +386,6 @@ function updateLeaderboardLive() {
             }
         }
 
-        // Update bar — proporsional terhadap currentMax
         var bar = card.querySelector('.member-bar');
         if (bar) {
             var pct = (memberDurations[n] || 0) / currentMax;
@@ -400,71 +393,75 @@ function updateLeaderboardLive() {
             bar.style.transform = 'scaleX(' + pct + ')';
         }
     }
-
-    // Cek apakah urutan berubah
-    var currentOrder = Object.keys(memberDurations).slice().sort(function(a, b) { return memberDurations[b] - memberDurations[a]; });
-    if (currentOrder.length !== _lastOrder.length || currentOrder.some(function(name, idx) { return name !== _lastOrder[idx]; })) {
-        _lastOrder = currentOrder.slice();
-        // Reorder akan dipanggil dari interval, tidak perlu dipanggil di sini
-    }
 }
 
 function reorderLeaderboard() {
-    var cards = document.querySelectorAll('.member-card');
-    if (cards.length === 0) return;
-    
-    // Urutan saat ini berdasarkan durasi
-    var sortedNames = Object.keys(memberDurations).slice().sort(function(a, b) { return memberDurations[b] - memberDurations[a]; });
-    
-    // Jika urutan sama dengan yang tersimpan, skip
-    if (sortedNames.length === _lastOrder.length && sortedNames.every(function(name, idx) { return name === _lastOrder[idx]; })) {
-        return;
-    }
-    _lastOrder = sortedNames.slice();
+    if (_reorderPending) return;
+    _reorderPending = true;
+    requestAnimationFrame(function() {
+        _reorderPending = false;
+        var cards = document.querySelectorAll('.member-card');
+        if (cards.length === 0) return;
 
-    var firstRects = {};
-    for (var i = 0; i < cards.length; i++) {
-        firstRects[cards[i].dataset.name] = cards[i].getBoundingClientRect();
-    }
+        var sortedNames = Object.keys(memberDurations).slice().sort(function(a, b) { return memberDurations[b] - memberDurations[a]; });
 
-    var memberListEl = document.getElementById('memberList');
-    // Reorder DOM
-    for (var j = 0; j < sortedNames.length; j++) {
-        var n = sortedNames[j];
-        var card = null;
+        // Cek apakah urutan saat ini sama dengan urutan baru
+        var currentOrder = [];
+        for (var i = 0; i < cards.length; i++) {
+            currentOrder.push(cards[i].dataset.name);
+        }
+        var same = true;
+        if (currentOrder.length === sortedNames.length) {
+            for (var j = 0; j < sortedNames.length; j++) {
+                if (currentOrder[j] !== sortedNames[j]) { same = false; break; }
+            }
+        } else {
+            same = false;
+        }
+        if (same) return;
+
+        var firstRects = {};
         for (var k = 0; k < cards.length; k++) {
-            if (cards[k].dataset.name === n) { card = cards[k]; break; }
+            firstRects[cards[k].dataset.name] = cards[k].getBoundingClientRect();
         }
-        if (card) memberListEl.appendChild(card);
-    }
-    applyRankStyles();
 
-    // FLIP animation
-    for (var l = 0; l < sortedNames.length; l++) {
-        var name = sortedNames[l];
-        var card2 = null;
-        for (var m = 0; m < cards.length; m++) {
-            if (cards[m].dataset.name === name) { card2 = cards[m]; break; }
+        var memberListEl = document.getElementById('memberList');
+        for (var l = 0; l < sortedNames.length; l++) {
+            var n = sortedNames[l];
+            var card = null;
+            for (var m = 0; m < cards.length; m++) {
+                if (cards[m].dataset.name === n) { card = cards[m]; break; }
+            }
+            if (card) memberListEl.appendChild(card);
         }
-        if (!card2) continue;
-        var first = firstRects[name];
-        var last = card2.getBoundingClientRect();
-        if (!first) continue;
-        var dy = first.top - last.top;
-        if (Math.abs(dy) < 1) continue;
-        card2.style.transition = 'transform 0s';
-        card2.style.transform = 'translateY(' + dy + 'px)';
-        requestAnimationFrame(function(cardRef) {
-            return function() {
-                requestAnimationFrame(function() {
-                    cardRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                    cardRef.style.transform = '';
-                    setTimeout(function() { cardRef.style.transition = '';
-                        cardRef.style.transform = ''; }, 600);
-                });
-            };
-        }(card2));
-    }
+        applyRankStyles();
+
+        for (var o = 0; o < sortedNames.length; o++) {
+            var name = sortedNames[o];
+            var card2 = null;
+            for (var p = 0; p < cards.length; p++) {
+                if (cards[p].dataset.name === name) { card2 = cards[p]; break; }
+            }
+            if (!card2) continue;
+            var first = firstRects[name];
+            var last = card2.getBoundingClientRect();
+            if (!first) continue;
+            var dy = first.top - last.top;
+            if (Math.abs(dy) < 1) continue;
+            card2.style.transition = 'transform 0s';
+            card2.style.transform = 'translateY(' + dy + 'px)';
+            requestAnimationFrame(function(cardRef) {
+                return function() {
+                    requestAnimationFrame(function() {
+                        cardRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        cardRef.style.transform = '';
+                        setTimeout(function() { cardRef.style.transition = '';
+                            cardRef.style.transform = ''; }, 600);
+                    });
+                };
+            }(card2));
+        }
+    });
 }
 
 // ══════════════════════════════════════════
