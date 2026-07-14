@@ -177,11 +177,15 @@ function showConfirm(_ref) {
     okBtn.textContent = okLabel;
     okBtn.className = okClass;
     _confirmCallback = onOk;
-    document.getElementById('confirmModal').style.display = 'flex';
+    var modal = document.getElementById('confirmModal');
+    modal.style.display = 'flex';
+    modal.style.zIndex = '9999'; // FIX: muncul di atas modal lain
 }
 
 function closeConfirm() {
-    document.getElementById('confirmModal').style.display = 'none';
+    var modal = document.getElementById('confirmModal');
+    modal.style.display = 'none';
+    modal.style.zIndex = ''; // FIX: kembalikan ke default
     _confirmCallback = null;
 }
 
