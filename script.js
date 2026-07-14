@@ -258,14 +258,14 @@ function renderStripItem(n, c, p, index) {
             var elapsed = (Date.now() - startTime) / 1000;
             memberDurations[n] = startDuration + elapsed;
             timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
-            requestAnimationFrame(function() {
-                updateLeaderboardLive();
-                updateTotalDuration();
-                updatePresentationLive();
-            });
-            if (Date.now() - lastReorder > 600) {
+            // Update semua visual langsung di sini
+            updateLeaderboardLive();
+            updateTotalDuration();
+            updatePresentationLive();
+            // Reorder lebih sering (300ms) agar animasi naik lebih halus
+            if (Date.now() - lastReorder > 300) {
                 lastReorder = Date.now();
-                requestAnimationFrame(function() { reorderLeaderboard(); });
+                reorderLeaderboard();
             }
         }, 50);
     }
@@ -277,11 +277,9 @@ function renderStripItem(n, c, p, index) {
         clearInterval(rippleInterval);
         rippleInterval = null;
         item.classList.remove('holding');
-        requestAnimationFrame(function() {
-            updateLeaderboardLive();
-            reorderLeaderboard();
-            updatePresentationLive();
-        });
+        updateLeaderboardLive();
+        reorderLeaderboard();
+        updatePresentationLive();
     }
 
     item.addEventListener('mousedown', startHold);
@@ -328,17 +326,11 @@ function reloadMemberList() {
     }
     applyRankStyles();
     refreshEditDropdown();
-    // Update max durasi
-    updateMaxDurEver();
+    updateLeaderboardLive();
 }
 
 function applyRankStyles() {
     var all = document.querySelectorAll('.member-card');
-    var maxDur = 0.001;
-    for (var i = 0; i < all.length; i++) {
-        var val = memberDurations[all[i].dataset.name] || 0;
-        if (val > maxDur) maxDur = val;
-    }
     for (var j = 0; j < all.length; j++) {
         var card = all[j];
         card.classList.remove('rank-1', 'rank-2', 'rank-3');
@@ -351,94 +343,92 @@ function applyRankStyles() {
 }
 
 // ══════════════════════════════════════════
-//  UPDATE LEADERBOARD — pakai _maxDurEver agar bar tidak turun
+//  UPDATE LEADERBOARD — denominator = durasi tertinggi saat ini
 // ══════════════════════════════════════════
-var _maxDurEver = 0.001;
 var _avatarState = {};
-var _updatePending = false;
+var _lastOrder = []; // simpan urutan terakhir untuk menghindari reorder berlebihan
 
-function updateMaxDurEver() {
+function updateLeaderboardLive() {
     var all = document.querySelectorAll('.member-card');
+    // Cari durasi tertinggi saat ini
     var currentMax = 0;
     for (var i = 0; i < all.length; i++) {
         var val = memberDurations[all[i].dataset.name] || 0;
         if (val > currentMax) currentMax = val;
     }
-    if (currentMax > _maxDurEver) {
-        _maxDurEver = currentMax;
+    if (currentMax < 0.001) currentMax = 0.001;
+
+    for (var j = 0; j < all.length; j++) {
+        var card = all[j];
+        var n = card.dataset.name;
+        var el = card.querySelector('.member-time');
+        if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
+        var avatar = card.querySelector('.member-avatar');
+        var isActive = !!memberIntervals[n];
+
+        // Animasi avatar (hold/release)
+        if (isActive) {
+            if (!card.classList.contains('is-active')) {
+                card.classList.add('is-active');
+            }
+            if (avatar) {
+                avatar.style.transition = 'transform 0.15s ease-out, box-shadow 0.15s ease-out';
+                avatar.style.transform = 'scale(1.18)';
+                avatar.style.boxShadow = '0 0 22px 6px ' + (memberColors[n] || '#a78bfa') + '66';
+                _avatarState[n] = 'active';
+            }
+        } else {
+            if (card.classList.contains('is-active')) {
+                card.classList.remove('is-active');
+                void card.offsetWidth;
+            }
+            if (avatar) {
+                if (_avatarState[n] !== 'inactive') {
+                    avatar.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                    avatar.style.transform = 'scale(1)';
+                    avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
+                    _avatarState[n] = 'inactive';
+                }
+            }
+        }
+
+        // Update bar — proporsional terhadap currentMax
+        var bar = card.querySelector('.member-bar');
+        if (bar) {
+            var pct = (memberDurations[n] || 0) / currentMax;
+            if (pct > 1) pct = 1;
+            bar.style.transform = 'scaleX(' + pct + ')';
+        }
     }
-    if (_maxDurEver < 0.001) _maxDurEver = 0.001;
-}
 
-function updateLeaderboardLive() {
-    if (_updatePending) return;
-    _updatePending = true;
-    requestAnimationFrame(function() {
-        _updatePending = false;
-        var all = document.querySelectorAll('.member-card');
-        // Update _maxDurEver jika ada durasi yang lebih tinggi
-        var currentMax = 0;
-        for (var i = 0; i < all.length; i++) {
-            var val = memberDurations[all[i].dataset.name] || 0;
-            if (val > currentMax) currentMax = val;
-        }
-        if (currentMax > _maxDurEver) {
-            _maxDurEver = currentMax;
-        }
-        if (_maxDurEver < 0.001) _maxDurEver = 0.001;
-
-        for (var j = 0; j < all.length; j++) {
-            var card = all[j];
-            var n = card.dataset.name;
-            var el = card.querySelector('.member-time');
-            if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
-            var avatar = card.querySelector('.member-avatar');
-            var isActive = !!memberIntervals[n];
-
-            if (isActive) {
-                if (!card.classList.contains('is-active')) {
-                    card.classList.add('is-active');
-                }
-                if (avatar) {
-                    avatar.style.transition = 'transform 0.15s ease-out, box-shadow 0.15s ease-out';
-                    avatar.style.transform = 'scale(1.18)';
-                    avatar.style.boxShadow = '0 0 22px 6px ' + (memberColors[n] || '#a78bfa') + '66';
-                    _avatarState[n] = 'active';
-                }
-            } else {
-                if (card.classList.contains('is-active')) {
-                    card.classList.remove('is-active');
-                    void card.offsetWidth;
-                }
-                if (avatar) {
-                    if (_avatarState[n] !== 'inactive') {
-                        avatar.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-                        avatar.style.transform = 'scale(1)';
-                        avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
-                        _avatarState[n] = 'inactive';
-                    }
-                }
-            }
-            var bar = card.querySelector('.member-bar');
-            if (bar) {
-                var pct = (memberDurations[n] || 0) / _maxDurEver;
-                if (pct > 1) pct = 1;
-                bar.style.transform = 'scaleX(' + pct + ')';
-            }
-        }
-    });
+    // Cek apakah urutan berubah
+    var currentOrder = Object.keys(memberDurations).slice().sort(function(a, b) { return memberDurations[b] - memberDurations[a]; });
+    if (currentOrder.length !== _lastOrder.length || currentOrder.some(function(name, idx) { return name !== _lastOrder[idx]; })) {
+        _lastOrder = currentOrder.slice();
+        // Reorder akan dipanggil dari interval, tidak perlu dipanggil di sini
+    }
 }
 
 function reorderLeaderboard() {
     var cards = document.querySelectorAll('.member-card');
     if (cards.length === 0) return;
+    
+    // Urutan saat ini berdasarkan durasi
+    var sortedNames = Object.keys(memberDurations).slice().sort(function(a, b) { return memberDurations[b] - memberDurations[a]; });
+    
+    // Jika urutan sama dengan yang tersimpan, skip
+    if (sortedNames.length === _lastOrder.length && sortedNames.every(function(name, idx) { return name === _lastOrder[idx]; })) {
+        return;
+    }
+    _lastOrder = sortedNames.slice();
+
     var firstRects = {};
     for (var i = 0; i < cards.length; i++) {
         firstRects[cards[i].dataset.name] = cards[i].getBoundingClientRect();
     }
-    var names = Object.keys(memberDurations);
-    var sortedNames = names.slice().sort(function(a, b) { return memberDurations[b] - memberDurations[a]; });
+
     var memberListEl = document.getElementById('memberList');
+    // Reorder DOM
     for (var j = 0; j < sortedNames.length; j++) {
         var n = sortedNames[j];
         var card = null;
@@ -448,6 +438,8 @@ function reorderLeaderboard() {
         if (card) memberListEl.appendChild(card);
     }
     applyRankStyles();
+
+    // FLIP animation
     for (var l = 0; l < sortedNames.length; l++) {
         var name = sortedNames[l];
         var card2 = null;
@@ -517,8 +509,6 @@ function finalizeAddMember(n, color, photoUrl) {
     savePhotoCache();
     reloadMemberStrip();
     reloadMemberList();
-    // update _maxDurEver
-    updateMaxDurEver();
     showToast('✅ ' + n + ' added');
 }
 
@@ -529,12 +519,10 @@ function resetMember(n) {
     memberDurations[n] = 0;
     reloadMemberStrip();
     reloadMemberList();
-    updateMaxDurEver();
     showUndoToast('↺ Reset ' + n, function() {
         memberDurations[n] = prev;
         reloadMemberStrip();
         reloadMemberList();
-        updateMaxDurEver();
         showToast('↩ Undo reset ' + n);
     });
 }
@@ -552,7 +540,6 @@ function deleteMember(n) {
     savePhotoCache();
     reloadMemberStrip();
     reloadMemberList();
-    updateMaxDurEver();
     showToast('🗑 ' + n + ' deleted');
 }
 
@@ -566,8 +553,6 @@ function confirmResetAll() {
                     memberIntervals[n] = null; }
                 memberDurations[n] = 0;
             }
-            // Reset _maxDurEver ke 0.001 agar bar mulai dari 0
-            _maxDurEver = 0.001;
             reloadMemberStrip();
             reloadMemberList();
             showToast('↺ All durations reset');
@@ -655,7 +640,6 @@ function applyEditFinal(oldName, newName, newColor, newPhoto) {
     closeEditModal();
     reloadMemberStrip();
     reloadMemberList();
-    updateMaxDurEver();
     showToast('✅ ' + newName + ' updated');
 }
 
@@ -748,8 +732,6 @@ function loadSelectedPreset() {
             memberColors[m.name] = m.color || '#a78bfa';
             memberPhotos[m.name] = m.photo || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(m.name) + '&background=random';
         }
-        // Reset _maxDurEver agar proporsional dengan preset baru
-        _maxDurEver = 0.001;
         savePhotoCache();
         reloadMemberStrip();
         reloadMemberList();
@@ -1102,16 +1084,14 @@ function addAdLibTime(memberName, amount) {
     memberDurations[memberName] = (memberDurations[memberName] || 0) + amount;
     var timeLabel = document.getElementById('strip-time-' + CSS.escape(memberName));
     if (timeLabel) timeLabel.textContent = memberDurations[memberName].toFixed(1) + 's';
-    requestAnimationFrame(function() {
-        updateLeaderboardLive();
-        updateTotalDuration();
-        updatePresentationLive();
-        reorderLeaderboard();
-        var overlay = document.getElementById('presentationOverlay');
-        if (overlay.style.display !== 'none') {
-            renderPresentationBars();
-        }
-    });
+    updateLeaderboardLive();
+    updateTotalDuration();
+    updatePresentationLive();
+    reorderLeaderboard();
+    var overlay = document.getElementById('presentationOverlay');
+    if (overlay.style.display !== 'none') {
+        renderPresentationBars();
+    }
 }
 
 function handleAdLibKeyDown(e) {
