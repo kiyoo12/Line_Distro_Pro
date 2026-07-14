@@ -263,7 +263,6 @@ function renderStripItem(n, c, p, index) {
         rippleInterval = setInterval(spawnRipple, 550);
         var startTime = Date.now();
         var startDuration = memberDurations[n] || 0;
-        // SIMPAN TIMESTAMP UNTUK TIMELINE
         memberStartTime[n] = getCurrentPlayerTime();
         memberIntervals[n] = setInterval(function() {
             var elapsed = (Date.now() - startTime) / 1000;
@@ -274,7 +273,6 @@ function renderStripItem(n, c, p, index) {
             updatePresentationLive();
             reorderLeaderboard();
         }, 50);
-        // Save state untuk undo
         saveStateForUndo();
     }
 
@@ -285,7 +283,6 @@ function renderStripItem(n, c, p, index) {
         clearInterval(rippleInterval);
         rippleInterval = null;
         item.classList.remove('holding');
-        // Simpan segmen timeline
         var endTime = getCurrentPlayerTime();
         var start = memberStartTime[n] || 0;
         var dur = memberDurations[n] || 0;
@@ -807,7 +804,6 @@ function loadLocalMedia(input) {
         aud.load();
         lbl.textContent = '🎵 ' + file.name;
     } else { showToast('⚠️ Format tidak didukung'); return; }
-    // Auto-detect judul dari file
     detectSongFromFile(file);
 }
 
@@ -823,11 +819,9 @@ function loadVideo() {
     yt.style.display = 'block';
     window._currentYtVideoId = v;
     if (window.ytPlayer) { window.ytPlayer.loadVideoById(v); } else { window.ytPlayer = new YT.Player('player', { height: '315', width: '100%', videoId: v }); }
-    // Auto-detect judul dari YouTube
     detectSongFromYouTube(url);
 }
 
-// ── AUTO-DETECT FUNCTIONS ──
 function detectSongFromYouTube(url) {
     fetch('https://noembed.com/embed?url=' + encodeURIComponent(url))
         .then(function(res) { return res.json(); })
@@ -846,7 +840,6 @@ function detectSongFromFile(file) {
     }
 }
 
-// ── GET CURRENT PLAYER TIME ──
 function getCurrentPlayerTime() {
     var vid = document.getElementById('localMedia');
     var aud = document.getElementById('audioPlayer');
@@ -857,7 +850,32 @@ function getCurrentPlayerTime() {
 }
 
 // ══════════════════════════════════════════
-//  6. FINISH + TIMELINE + CHART
+//  KEADILAN PEMBAGIAN LINE (Gini Coefficient)
+// ══════════════════════════════════════════
+function calculateFairness(durations) {
+    var values = [];
+    for (var key in durations) {
+        values.push(durations[key]);
+    }
+    if (values.length === 0) return { gini: 0, fairness: 100 };
+    var sorted = values.slice().sort(function(a, b) { return a - b; });
+    var n = sorted.length;
+    var sum = 0;
+    for (var i = 0; i < n; i++) sum += sorted[i];
+    if (sum === 0) return { gini: 0, fairness: 100 };
+    var sumIndex = 0;
+    for (var j = 0; j < n; j++) {
+        sumIndex += (j + 1) * sorted[j];
+    }
+    var gini = (2 * sumIndex) / (n * sum) - (n + 1) / n;
+    if (gini < 0) gini = 0;
+    if (gini > 1) gini = 1;
+    var fairness = (1 - gini) * 100;
+    return { gini: gini, fairness: fairness };
+}
+
+// ══════════════════════════════════════════
+//  6. FINISH + TIMELINE + CHART + KEADILAN
 // ══════════════════════════════════════════
 function finish() {
     var names = Object.keys(memberDurations);
@@ -891,6 +909,17 @@ function finish() {
         item.innerHTML = '\n            <div class="rank-name">\n                <img src="' + memberPhotos[memberName] + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;"\n                     onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(memberName) + '\'">\n                <span class="rank-badge">' + (l + 1) + '</span>\n                <span>' + memberName + '</span>\n            </div>\n            <div class="rank-meta">\n                <span class="rank-time">' + memberDurations[memberName].toFixed(1) + 's</span>\n                <span class="rank-pct">' + pct + '%</span>\n            </div>';
         lb.appendChild(item);
     }
+
+    // ── KEADILAN ──
+    var fairness = calculateFairness(memberDurations);
+    var fairnessHtml = '<div style="margin-top:14px;padding:12px 16px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;">';
+    fairnessHtml += '<span style="color:var(--text2);font-size:13px;">⚖️ Keadilan Pembagian Line</span>';
+    var color = fairness.fairness > 70 ? '#4ade80' : fairness.fairness > 40 ? '#fbbf24' : '#f87171';
+    fairnessHtml += '<span style="font-weight:700;font-size:20px;color:' + color + ';">' + fairness.fairness.toFixed(1) + '%</span>';
+    fairnessHtml += '<span style="color:var(--text3);font-size:11px;margin-left:8px;">(Gini: ' + fairness.gini.toFixed(3) + ')</span>';
+    fairnessHtml += '</div>';
+    lb.insertAdjacentHTML('afterend', fairnessHtml);
+
     document.getElementById('resultSongTitle').textContent = '🎵 ' + title;
     document.getElementById('resultDateLabel').textContent = new Date().toLocaleString('en-US');
     if (chartInstance) chartInstance.destroy();
@@ -924,7 +953,7 @@ function finish() {
     saveToHistory(title, sorted, memberDurations, memberColors, memberPhotos, total);
     document.getElementById('resultModal').style.display = 'flex';
 
-    // ── TAMBAHKAN VISUAL TIMELINE ──
+    // ── TIMELINE ──
     setTimeout(function() {
         var modalBox = document.querySelector('#resultModal .modal-box');
         var existing = document.getElementById('timelineContainer');
@@ -1140,21 +1169,19 @@ function confirmClearHistory() {
 function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
 
 // ══════════════════════════════════════════
-//  8. KEYBOARD SHORTCUTS (FITUR 4)
+//  8. KEYBOARD SHORTCUTS
 // ══════════════════════════════════════════
 var activeKeyHolds = new Set();
 
 document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    // Ctrl+S = Save Preset
     if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
         saveNewPreset();
         return;
     }
 
-    // Space = Play/Pause
     if (e.code === 'Space') {
         e.preventDefault();
         var vid = document.getElementById('localMedia');
@@ -1163,7 +1190,6 @@ document.addEventListener('keydown', function(e) {
         return;
     }
 
-    // SHORTCUTS
     switch(e.key.toLowerCase()) {
         case 'z':
             if (e.ctrlKey || e.metaKey) {
@@ -1197,11 +1223,9 @@ document.addEventListener('keydown', function(e) {
             break;
     }
 
-    // Hold 1-9, 0
     var idx = parseInt(e.key) - 1;
     if (e.key === '0') idx = 9;
     if (isNaN(idx) || idx < 0 || idx > 9) {
-        // Ad-libs tap (Q-P) — FITUR 5
         handleAdLibTap(e);
         return;
     }
@@ -1237,7 +1261,7 @@ window.addEventListener('blur', function() {
 });
 
 // ══════════════════════════════════════════
-//  AD-LIBS TAP (FITUR 5)
+//  AD-LIBS TAP
 // ══════════════════════════════════════════
 var AD_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
 
@@ -1266,19 +1290,17 @@ function handleAdLibTap(e) {
     reorderLeaderboard();
     saveStateForUndo();
 
-    // Efek visual ad-lib
     item.classList.add('adlib-active');
     clearTimeout(item._adlibTimer);
     item._adlibTimer = setTimeout(function() {
         item.classList.remove('adlib-active');
     }, 300);
 
-    // Haptic feedback
     if (navigator.vibrate) navigator.vibrate(10);
 }
 
 // ══════════════════════════════════════════
-//  UNDO/REDO (FITUR 4)
+//  UNDO/REDO
 // ══════════════════════════════════════════
 function saveStateForUndo() {
     var state = {
@@ -1321,7 +1343,7 @@ function restoreState(state) {
 }
 
 // ══════════════════════════════════════════
-//  EXPORT DATA (FITUR 4)
+//  EXPORT DATA
 // ══════════════════════════════════════════
 function exportData() {
     var names = Object.keys(memberDurations);
@@ -1350,7 +1372,7 @@ function exportData() {
 }
 
 // ══════════════════════════════════════════
-//  AUTO-SAVE (FITUR 9)
+//  AUTO-SAVE
 // ══════════════════════════════════════════
 function saveAutoState() {
     var data = {
@@ -1607,7 +1629,6 @@ window.onload = function() {
     reloadMemberStrip();
     reloadMemberList();
 
-    // Auto-load autosave
     var hasAuto = loadAutoState();
     if (hasAuto) {
         showToast('🔄 Auto-save restored');
@@ -1616,10 +1637,7 @@ window.onload = function() {
         updateTotalDuration();
     }
 
-    // Mulai auto-save
     startAutoSave();
-
-    // Simpan state awal untuk undo
     saveStateForUndo();
 
     var saveEditBtn = document.querySelector('#editModal .btn-primary');
