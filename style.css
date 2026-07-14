@@ -1178,3 +1178,26 @@ button, .file-btn {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
+
+/* ══════════════════════════════════════════
+   MODAL CLOSE BUTTON (X)
+   ══════════════════════════════════════════ */
+.modal-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: var(--text2);
+    font-size: 22px;
+    font-weight: 400;
+    cursor: pointer;
+    transition: color 0.2s, transform 0.2s;
+    line-height: 1;
+    padding: 4px 8px;
+    z-index: 10;
+}
+.modal-close:hover {
+    color: var(--danger);
+    transform: scale(1.15);
+}
