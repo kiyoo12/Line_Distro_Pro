@@ -254,7 +254,7 @@ button, .file-btn {
 .media-label { font-size: 12px; color: var(--text3); text-align: center; margin-top: 8px; }
 
 /* ══════════════════════════════════════════
-   MEMBER STRIP — now wrap to 5 per row
+   MEMBER STRIP — wrap 5 per row
    ══════════════════════════════════════════ */
 .member-strip {
     display: flex;
@@ -267,7 +267,7 @@ button, .file-btn {
 }
 
 .strip-item {
-    flex: 0 0 calc(20% - 8px); /* 5 items per row */
+    flex: 0 0 calc(20% - 8px);
     max-width: 80px;
     min-width: 56px;
     display: flex;
@@ -376,7 +376,7 @@ button, .file-btn {
     pointer-events: none;
 }
 
-/* Ad-lib badge di kiri bawah (sejajar dengan nomor) */
+/* Ad-lib badge di kiri bawah */
 .strip-ad-key {
     position: absolute;
     bottom: -2px;
@@ -481,7 +481,7 @@ button, .file-btn {
     width: 8px; height: 8px;
     border-radius: 50%;
     background: #ff4d4d;
-    margin-right: 6px;
+    margin-right: 4px;
     opacity: 0;
     transform: scale(0.4);
     box-shadow: none;
@@ -559,7 +559,6 @@ button, .file-btn {
     text-align: right;
 }
 
-/* Progress bar di dalam kartu — menggunakan transform scaleX */
 .member-bar-wrap {
     width: 100%;
     height: 4px;
@@ -580,7 +579,6 @@ button, .file-btn {
     background: linear-gradient(90deg, var(--purple), var(--cyan));
 }
 
-/* Glow dot di ujung bar */
 .member-bar::after {
     content: '';
     position: absolute;
@@ -595,7 +593,6 @@ button, .file-btn {
     opacity: 0.85;
 }
 
-/* Saat Ad-lib aktif, bar berubah hijau glow */
 .member-card.adlib-card .member-bar {
     background: linear-gradient(90deg, #4ade80, #22d3ee) !important;
     box-shadow: 0 0 12px #4ade80;
@@ -605,7 +602,6 @@ button, .file-btn {
     border-color: #4ade80 !important;
 }
 
-/* Peringkat */
 .rank-num {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 700;
@@ -941,7 +937,7 @@ button, .file-btn {
 .toast-undo-btn:hover { filter: brightness(1.15); }
 
 /* ══════════════════════════════════════════
-   PRESENTATION MODE — video background
+   PRESENTATION MODE
    ══════════════════════════════════════════ */
 .press-overlay {
     position: fixed;
@@ -1158,9 +1154,6 @@ button, .file-btn {
     .press-time { font-size: 12px; }
 }
 
-/* ══════════════════════════════════════════
-   TOOLTIP
-   ══════════════════════════════════════════ */
 .strip-tooltip {
     position: absolute;
     bottom: calc(100% + 10px);
