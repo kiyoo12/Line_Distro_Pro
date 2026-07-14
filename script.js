@@ -102,11 +102,15 @@ var chartInstance = null;
 var memberStartTime = {};       // untuk timeline sync
 var timelineData = [];          // menyimpan segmen per member
 var autoSaveInterval = null;
-var lastTapTime = {};           // untuk deteksi double tap pada ad-libs
 var historyStack = [];          // untuk undo/redo
 var historyIndex = -1;
 var _reorderPending = false;
 var _avatarState = {};
+
+// ── AD-LIBS HOLD ──
+var activeAdLibKeys = new Set();
+var adLibIntervals = {};
+var AD_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
 
 // ══════════════════════════════════════════
 //  TOAST & CONFIRM & PROMPT
@@ -236,7 +240,7 @@ function renderStripItem(n, c, p, index) {
     var adLabel = index < 10 ? 'QWERTYUIOP'[index] : '';
     var keyBadge = keyLabel !== '' ? '<span class="strip-key">' + keyLabel + '</span>' : '';
     var adBadge = adLabel !== '' ? '<span class="strip-ad-key">' + adLabel + '</span>' : '';
-    var tooltip = index < 10 ? 'Hold [' + (keyLabel || '0') + '] · Tap [' + adLabel + '] Ad-Lib' : 'Hold to record';
+    var tooltip = index < 10 ? 'Hold [' + (keyLabel || '0') + '] · Hold [' + adLabel + '] Ad-Lib' : 'Hold to record';
     item.title = tooltip;
     item.innerHTML = '\n        <div class="strip-avatar-wrap" id="sav-' + CSS.escape(n) + '">\n            <img src="' + p + '" class="strip-avatar" onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            ' + keyBadge + '\n            ' + adBadge + '\n        </div>\n        <div class="strip-name">' + n + '</div>\n        <div class="strip-time" id="strip-time-' + CSS.escape(n) + '">' + (memberDurations[n] || 0).toFixed(1) + 's</div>\n        <div class="strip-tooltip">' + tooltip + '</div>';
     memberStrip.appendChild(item);
@@ -1169,19 +1173,21 @@ function confirmClearHistory() {
 function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
 
 // ══════════════════════════════════════════
-//  8. KEYBOARD SHORTCUTS
+//  8. KEYBOARD SHORTCUTS + AD-LIBS HOLD
 // ══════════════════════════════════════════
 var activeKeyHolds = new Set();
 
 document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+    // Ctrl+S = Save Preset
     if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
         saveNewPreset();
         return;
     }
 
+    // Space = Play/Pause
     if (e.code === 'Space') {
         e.preventDefault();
         var vid = document.getElementById('localMedia');
@@ -1190,6 +1196,7 @@ document.addEventListener('keydown', function(e) {
         return;
     }
 
+    // SHORTCUTS (E sudah diganti X untuk Export)
     switch(e.key.toLowerCase()) {
         case 'z':
             if (e.ctrlKey || e.metaKey) {
@@ -1207,7 +1214,7 @@ document.addEventListener('keydown', function(e) {
             openPresentation();
             break;
         case 'x':
-    exportData();
+            exportData();
             break;
         case 'h':
             openHistory();
@@ -1223,10 +1230,12 @@ document.addEventListener('keydown', function(e) {
             break;
     }
 
+    // ── HOLD 1-9, 0 ──
     var idx = parseInt(e.key) - 1;
     if (e.key === '0') idx = 9;
     if (isNaN(idx) || idx < 0 || idx > 9) {
-        handleAdLibTap(e);
+        // ── AD-LIBS HOLD (Q-P) ──
+        handleAdLibKeyDown(e);
         return;
     }
     if (activeKeyHolds.has(idx)) return;
@@ -1239,9 +1248,12 @@ document.addEventListener('keydown', function(e) {
 
 document.addEventListener('keyup', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
     var idx = parseInt(e.key) - 1;
     if (e.key === '0') idx = 9;
     if (isNaN(idx) || idx < 0 || idx > 9) {
+        // AD-LIBS HOLD RELEASE
+        handleAdLibKeyUp(e);
         return;
     }
     activeKeyHolds.delete(idx);
@@ -1258,45 +1270,117 @@ window.addEventListener('blur', function() {
         if (item) item.dispatchEvent(new MouseEvent('mouseup'));
     });
     activeKeyHolds.clear();
+    // Lepas semua ad-libs
+    activeAdLibKeys.forEach(function(idx) { clearAdLib(idx); });
+    activeAdLibKeys.clear();
+    for (var key in adLibIntervals) {
+        clearInterval(adLibIntervals[key]);
+        delete adLibIntervals[key];
+    }
 });
 
 // ══════════════════════════════════════════
-//  AD-LIBS TAP
+//  AD-LIBS HOLD (Q-P)
 // ══════════════════════════════════════════
-var AD_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
+function addAdLibTime(memberName, amount) {
+    if (amount === undefined) amount = 0.05;
+    if (!memberDurations[memberName]) return;
+    memberDurations[memberName] = (memberDurations[memberName] || 0) + amount;
+    var timeLabel = document.getElementById('strip-time-' + CSS.escape(memberName));
+    if (timeLabel) timeLabel.textContent = memberDurations[memberName].toFixed(1) + 's';
+    updateLeaderboardLive();
+    updateTotalDuration();
+    updatePresentationLive();
+    reorderLeaderboard();
+    var overlay = document.getElementById('presentationOverlay');
+    if (overlay.style.display !== 'none') {
+        renderPresentationBars();
+    }
+    saveStateForUndo();
+}
 
-function handleAdLibTap(e) {
+function handleAdLibKeyDown(e) {
     var key = e.key.toUpperCase();
     var idx = AD_KEYS.indexOf(key);
     if (idx < 0) return;
+    if (activeAdLibKeys.has(idx)) return;
     var items = document.querySelectorAll('.strip-item');
     var item = items[idx];
     if (!item) return;
     var n = item.dataset.name;
     if (!n) return;
+    activeAdLibKeys.add(idx);
+    startAdLib(idx, item);
+    if (adLibIntervals[idx]) clearInterval(adLibIntervals[idx]);
+    adLibIntervals[idx] = setInterval(function() {
+        addAdLibTime(n, 0.05);
+    }, 50);
+}
 
-    var now = Date.now();
-    var last = lastTapTime[idx] || 0;
-    var isDouble = (now - last) < 300;
-    var amount = isDouble ? 0.3 : 0.1;
-    lastTapTime[idx] = now;
+function handleAdLibKeyUp(e) {
+    var key = e.key.toUpperCase();
+    var idx = AD_KEYS.indexOf(key);
+    if (idx < 0) return;
+    activeAdLibKeys.delete(idx);
+    clearAdLib(idx);
+    if (adLibIntervals[idx]) {
+        clearInterval(adLibIntervals[idx]);
+        delete adLibIntervals[idx];
+    }
+}
 
-    memberDurations[n] = (memberDurations[n] || 0) + amount;
-    var timeLabel = document.getElementById('strip-time-' + CSS.escape(n));
-    if (timeLabel) timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
-    updateLeaderboardLive();
-    updateTotalDuration();
-    updatePresentationLive();
-    reorderLeaderboard();
-    saveStateForUndo();
-
+function startAdLib(idx, item) {
     item.classList.add('adlib-active');
-    clearTimeout(item._adlibTimer);
-    item._adlibTimer = setTimeout(function() {
-        item.classList.remove('adlib-active');
-    }, 300);
+    var wrap = item.querySelector('.strip-avatar-wrap');
+    if (wrap) wrap.classList.add('adlib-glow');
+    var n = item.dataset.name;
+    var cards = document.querySelectorAll('.member-card');
+    var card = null;
+    for (var i = 0; i < cards.length; i++) {
+        if (cards[i].dataset.name === n) { card = cards[i]; break; }
+    }
+    if (card) {
+        card.classList.add('adlib-card');
+        var avatar = card.querySelector('.member-avatar');
+        if (avatar) {
+            avatar.style.borderColor = '#4ade80';
+            avatar.style.boxShadow = '0 0 20px 6px rgba(74,222,128,0.6)';
+        }
+        var bar = card.querySelector('.member-bar');
+        if (bar) {
+            bar.style.background = 'linear-gradient(90deg, #4ade80, #22d3ee)';
+            bar.style.boxShadow = '0 0 12px #4ade80';
+        }
+    }
+}
 
-    if (navigator.vibrate) navigator.vibrate(10);
+function clearAdLib(idx) {
+    var items = document.querySelectorAll('.strip-item');
+    var item = items[idx];
+    if (!item) return;
+    item.classList.remove('adlib-active');
+    var wrap = item.querySelector('.strip-avatar-wrap');
+    if (wrap) wrap.classList.remove('adlib-glow');
+    var n = item.dataset.name;
+    var cards = document.querySelectorAll('.member-card');
+    var card = null;
+    for (var i = 0; i < cards.length; i++) {
+        if (cards[i].dataset.name === n) { card = cards[i]; break; }
+    }
+    if (card) {
+        card.classList.remove('adlib-card');
+        var avatar = card.querySelector('.member-avatar');
+        if (avatar) {
+            avatar.style.borderColor = memberColors[n] || '#a78bfa';
+            avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
+        }
+        var bar = card.querySelector('.member-bar');
+        if (bar) {
+            var c = memberColors[n] || '#a78bfa';
+            bar.style.background = 'linear-gradient(90deg, ' + c + '88, ' + c + ')';
+            bar.style.boxShadow = '';
+        }
+    }
 }
 
 // ══════════════════════════════════════════
@@ -1343,7 +1427,7 @@ function restoreState(state) {
 }
 
 // ══════════════════════════════════════════
-//  EXPORT DATA
+//  EXPORT DATA (X)
 // ══════════════════════════════════════════
 function exportData() {
     var names = Object.keys(memberDurations);
