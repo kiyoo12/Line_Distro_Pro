@@ -662,22 +662,76 @@ function deleteMember(n) {
     showToast('🗑 ' + n + ' deleted');
 }
 
+// ══════════════════════════════════════════
+//  RESET ALL (FULL RESET)
+// ══════════════════════════════════════════
 function confirmResetAll() {
     var names = Object.keys(memberDurations);
     if (names.length === 0) { showToast('⚠️ No members yet'); return; }
-    showConfirm({ icon: '↺', title: 'Reset all durations?', msg: 'All recorded times will reset to 0.', okLabel: 'Reset', okClass: 'btn-primary', onOk: function() {
-            for (var i = 0; i < names.length; i++) {
-                var n = names[i];
-                if (memberIntervals[n]) { clearInterval(memberIntervals[n]);
-                    memberIntervals[n] = null; }
-                memberDurations[n] = 0;
-            }
-            timelineData = [];
-            reloadMemberStrip();
-            reloadMemberList();
-            saveStateForUndo();
-            showToast('↺ All durations reset');
-        } });
+    showConfirm({
+        icon: '↺',
+        title: 'Reset All?',
+        msg: 'This will reset ALL member durations, player position, and timeline. Are you sure?',
+        okLabel: 'Reset All',
+        okClass: 'btn-primary',
+        onOk: function() {
+            resetAllData();
+        }
+    });
+}
+
+function resetAllData() {
+    var names = Object.keys(memberDurations);
+
+    // ── 1. RESET DURASI MEMBER ──
+    for (var i = 0; i < names.length; i++) {
+        var n = names[i];
+        if (memberIntervals[n]) {
+            clearInterval(memberIntervals[n]);
+            memberIntervals[n] = null;
+        }
+        memberDurations[n] = 0;
+    }
+
+    // ── 2. RESET TIMELINE ──
+    timelineData = [];
+
+    // ── 3. RESET PLAYER (ke 0:00) ──
+    resetPlayerToStart();
+
+    // ── 4. UPDATE UI ──
+    reloadMemberStrip();
+    reloadMemberList();
+    updateTotalDuration();
+    updateLeaderboardLive();
+    saveStateForUndo();
+
+    showToast('↺ All data reset successfully');
+}
+
+function resetPlayerToStart() {
+    var vid = document.getElementById('localMedia');
+    var aud = document.getElementById('audioPlayer');
+    var ytPlayer = window.ytPlayer;
+
+    if (vid && vid.style.display !== 'none' && vid.src) {
+        vid.currentTime = 0;
+        vid.pause();
+    }
+    if (aud && aud.style.display !== 'none' && aud.src) {
+        aud.currentTime = 0;
+        aud.pause();
+    }
+    if (ytPlayer && ytPlayer.seekTo) {
+        try {
+            ytPlayer.seekTo(0, true);
+            ytPlayer.pauseVideo();
+        } catch (e) {
+            console.log('⚠️ YouTube seek failed:', e);
+        }
+    }
+
+    updateMediaProgress();
 }
 
 // ══════════════════════════════════════════
@@ -2370,14 +2424,21 @@ function updateLyricsOnHold() {
     }
 }
 
-// ── Scroll ke lirik aktif ──
+// ── Scroll ke lirik aktif (HANYA JIKA TIDAK TERLIHAT) ──
 function scrollToActiveLyric() {
     var container = document.getElementById('lyricsContainer');
     if (!container) return;
     var activeEl = container.querySelector('.lyric-line.active');
     if (activeEl) {
-        var offset = activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
-        container.scrollTo({ top: offset, behavior: 'smooth' });
+        // Cek apakah baris aktif terlihat
+        var containerRect = container.getBoundingClientRect();
+        var activeRect = activeEl.getBoundingClientRect();
+        var isVisible = (activeRect.top >= containerRect.top && activeRect.bottom <= containerRect.bottom);
+
+        if (!isVisible) {
+            var offset = activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
+            container.scrollTo({ top: offset, behavior: 'smooth' });
+        }
     }
 }
 
