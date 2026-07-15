@@ -16,7 +16,6 @@ module.exports = async (req, res) => {
 
     if (videoId) {
         try {
-            // ── AMBIL JUDUL DARI YOUTUBE oEmbed ──
             const oembedRes = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
             const title = oembedRes.data.title;
             const author = oembedRes.data.author_name;
@@ -24,7 +23,6 @@ module.exports = async (req, res) => {
             console.log(`🎵 YouTube title: ${title}`);
             console.log(`👤 Channel: ${author}`);
 
-            // ── PARSE JUDUL UNTUK DAPAT ARTIS + JUDUL LAGU ──
             parsedTitle = cleanVideoTitle(title);
             console.log(`📝 Parsed: ${parsedTitle}`);
         } catch (e) {
@@ -41,30 +39,51 @@ module.exports = async (req, res) => {
 
         const results = lrcRes.data;
         if (results && results.length > 0) {
-            const song = results[0];
+            // ── PRIORITAS: SYNCED DULU ──
+            let sorted = results.sort((a, b) => {
+                // 1. Prioritaskan yang punya syncedLyrics
+                const aSynced = a.syncedLyrics && a.syncedLyrics.trim().length > 0;
+                const bSynced = b.syncedLyrics && b.syncedLyrics.trim().length > 0;
+                if (aSynced && !bSynced) return -1;
+                if (!aSynced && bSynced) return 1;
+
+                // 2. Prioritaskan duration lebih panjang (lagu utuh)
+                if (a.duration && b.duration) {
+                    return b.duration - a.duration;
+                }
+
+                // 3. Prioritaskan yang judulnya lebih mirip dengan query
+                const aScore = getTitleSimilarity(a.trackName || '', parsedTitle);
+                const bScore = getTitleSimilarity(b.trackName || '', parsedTitle);
+                return bScore - aScore;
+            });
+
+            // ── AMBIL YANG TERBAIK ──
+            const song = sorted[0];
             const lyrics = song.syncedLyrics || song.plainLyrics;
+
             if (lyrics) {
+                console.log(`✅ Found: ${song.trackName} - ${song.artistName} (${song.syncedLyrics ? 'SYNCED' : 'plain'})`);
                 return res.json({
                     success: true,
                     lyrics: lyrics,
                     synced: !!song.syncedLyrics,
                     title: song.trackName || 'Unknown',
-                    artist: song.artistName || 'Unknown'
+                    artist: song.artistName || 'Unknown',
+                    duration: song.duration || 0
                 });
             }
         }
     } catch (e) {
-        console.log('⚠️ LRCLIB failed, trying fallback...');
+        console.log('⚠️ LRCLIB failed:', e.message);
     }
 
     // ── 3. FALLBACK: lyrics.ovh ──
     try {
-        // Coba split judul - artis atau artis - judul
         const parts = parsedTitle.split(/ - | – | \| /);
         let artist = '';
         let title = parsedTitle;
         if (parts.length >= 2) {
-            // Coba deteksi mana yang lebih cocok sebagai artis
             if (parts[0].length < parts[1].length || parts[0].includes(' ')) {
                 artist = parts[0].trim();
                 title = parts[1].trim();
@@ -74,7 +93,6 @@ module.exports = async (req, res) => {
             }
         }
 
-        // Hapus kata-kata umum dari judul
         title = cleanSongTitle(title);
 
         console.log(`🔍 Fallback searching: ${title} - ${artist || 'unknown'}`);
@@ -116,8 +134,17 @@ module.exports = async (req, res) => {
 //  HELPER FUNCTIONS
 // ══════════════════════════════════════════
 
+function getTitleSimilarity(str1, str2) {
+    const words1 = str1.toLowerCase().split(' ');
+    const words2 = str2.toLowerCase().split(' ');
+    let match = 0;
+    for (const w of words1) {
+        if (w.length > 2 && words2.includes(w)) match++;
+    }
+    return match;
+}
+
 function cleanVideoTitle(title) {
-    // Hapus kata-kata umum di judul video
     let cleaned = title
         .replace(/\(Official (?:Music )?Video\)/gi, '')
         .replace(/\(Official MV\)/gi, '')
@@ -131,7 +158,6 @@ function cleanVideoTitle(title) {
         .replace(/(Cover|Remix) \(.*?\)/gi, '')
         .trim();
 
-    // Hapus kata-kata keterangan di akhir
     cleaned = cleaned.replace(/\s*(Official|Music Video|MV|4K|HD|Lyrics|Color Coded|Easy Lyrics).*$/i, '').trim();
 
     return cleaned;
