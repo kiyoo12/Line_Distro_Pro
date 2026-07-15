@@ -506,6 +506,9 @@ function updateLeaderboardLive() {
             }
         }
     }
+
+    // ── Update lirik highlight saat hold berubah ──
+    renderLyrics();  // <── TARUH DI SINI!
 }
 
 function reorderLeaderboard() {
@@ -2428,3 +2431,189 @@ async function searchLyrics() {
         showToast('⚠️ Lyrics not found for this song');
     }
 }
+
+// ══════════════════════════════════════════
+//  LYRICS SYNC WITH PLAYER & HOLD
+// ══════════════════════════════════════════
+
+// ── Variabel global ──
+var _lyricsData = [];           // [{time: seconds, text: string}]
+var _lyricsActiveIndex = -1;
+var _lyricsUpdateInterval = null;
+
+// ── Parse LRC ──
+function parseLRC(content) {
+    var lines = content.split('\n');
+    var parsed = [];
+    var timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
+    
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        
+        var match = line.match(timeRegex);
+        if (match) {
+            var min = parseInt(match[1]);
+            var sec = parseInt(match[2]);
+            var millis = match[3] ? parseInt(match[3]) / (match[3].length === 2 ? 100 : 1000) : 0;
+            var time = min * 60 + sec + millis;
+            var text = line.replace(/\[.*?\]/g, '').trim();
+            if (text) {
+                parsed.push({ time: time, text: text });
+            }
+        }
+    }
+    
+    parsed.sort(function(a, b) { return a.time - b.time; });
+    _lyricsData = parsed;
+    renderLyrics();
+    startLyricsSync();
+}
+
+// ── Render lirik dengan highlight member ──
+function renderLyrics() {
+    var container = document.getElementById('lyricsContainer');
+    if (!container) return;
+    
+    if (_lyricsData.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:var(--text3);padding:30px 0;">No lyrics loaded.<br>Upload a .lrc file or click 🔍 Search.</div>';
+        return;
+    }
+    
+    var activeMembers = getActiveMembers();
+    var activeColors = activeMembers.map(function(n) { return memberColors[n] || '#a78bfa'; });
+    var isDuet = activeMembers.length >= 2;
+    var avgColor = isDuet ? getAverageColor(activeColors) : (activeColors[0] || '#ffffff');
+    var gradientBar = isDuet ? getGradientForActive(activeColors) : null;
+    
+    var html = '';
+    for (var i = 0; i < _lyricsData.length; i++) {
+        var l = _lyricsData[i];
+        var cls = 'lyric-line';
+        var style = '';
+        
+        if (i === _lyricsActiveIndex) {
+            cls += ' active';
+            // Highlight warna member
+            if (activeMembers.length > 0) {
+                if (isDuet) {
+                    style = 'color:white; background:' + avgColor + '33; border-left:3px solid ' + avgColor + ';';
+                } else {
+                    style = 'color:white; background:' + activeColors[0] + '33; border-left:3px solid ' + activeColors[0] + ';';
+                }
+            } else {
+                style = 'color:white; background:rgba(167,139,250,0.15); border-left:3px solid var(--purple);';
+            }
+        } else if (i < _lyricsActiveIndex) {
+            cls += ' past';
+        }
+        
+        html += '<div class="' + cls + '" style="' + style + '" data-index="' + i + '">' + l.text + '</div>';
+    }
+    container.innerHTML = html;
+}
+
+// ── Update lirik berdasarkan waktu ──
+function updateLyrics(currentTime) {
+    if (_lyricsData.length === 0) return;
+    
+    var newIndex = -1;
+    for (var i = 0; i < _lyricsData.length; i++) {
+        if (currentTime >= _lyricsData[i].time) {
+            newIndex = i;
+        } else {
+            break;
+        }
+    }
+    
+    if (newIndex !== _lyricsActiveIndex) {
+        _lyricsActiveIndex = newIndex;
+        renderLyrics();
+        scrollToActiveLyric();
+    }
+}
+
+// ── Scroll ke lirik aktif ──
+function scrollToActiveLyric() {
+    var container = document.getElementById('lyricsContainer');
+    if (!container) return;
+    var activeEl = container.querySelector('.lyric-line.active');
+    if (activeEl) {
+        var offset = activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
+        container.scrollTo({ top: offset, behavior: 'smooth' });
+    }
+}
+
+// ── Start sync dengan player ──
+function startLyricsSync() {
+    if (_lyricsUpdateInterval) clearInterval(_lyricsUpdateInterval);
+    _lyricsUpdateInterval = setInterval(function() {
+        var current = getCurrentPlayerTime();
+        updateLyrics(current);
+    }, 200);
+}
+
+function stopLyricsSync() {
+    if (_lyricsUpdateInterval) {
+        clearInterval(_lyricsUpdateInterval);
+        _lyricsUpdateInterval = null;
+    }
+}
+
+// ── Load LRC dari file ──
+function loadLRCFile(input) {
+    var file = input.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        parseLRC(e.target.result);
+        showToast('📝 Lyrics loaded: ' + file.name);
+    };
+    reader.readAsText(file);
+}
+
+// ── Clear lyrics ──
+function clearLyrics() {
+    _lyricsData = [];
+    _lyricsActiveIndex = -1;
+    renderLyrics();
+    document.getElementById('lrcUpload').value = '';
+    showToast('🗑 Lyrics cleared');
+}
+
+// ── Search lyrics online ──
+async function searchLyrics() {
+    var titleInput = document.getElementById('songTitle');
+    var query = titleInput.value.trim();
+    if (!query) {
+        showToast('⚠️ Please enter a song title first');
+        return;
+    }
+
+    showToast('🔍 Searching lyrics...');
+    var result = await fetchLyricsFromAPI(query);
+    
+    if (result) {
+        // Konversi ke format LRC (timestamp dari API tidak ada, jadi kita buat dummy)
+        var lines = result.lyrics.split('\n');
+        var parsed = [];
+        var time = 0;
+        for (var i = 0; i < lines.length; i++) {
+            var text = lines[i].trim();
+            if (text) {
+                parsed.push({ time: time, text: text });
+                time += 3; // dummy: setiap baris 3 detik
+            }
+        }
+        _lyricsData = parsed;
+        renderLyrics();
+        startLyricsSync();
+        showToast('✅ Lyrics loaded from online!');
+    } else {
+        showToast('⚠️ Lyrics not found for this song');
+    }
+}
+
+// ── Update leaderboard (panggil renderLyrics ulang saat hold berubah) ──
+// Tambahkan di updateLeaderboardLive() di bagian akhir:
+// renderLyrics();
