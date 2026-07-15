@@ -106,12 +106,61 @@ var historyStack = [];
 var historyIndex = -1;
 var _reorderPending = false;
 var _avatarState = {};
-var _pressReorderPending = false; // untuk presentasi
+var _pressReorderPending = false;
 
 // ── AD-LIBS HOLD ──
 var activeAdLibKeys = new Set();
 var adLibIntervals = {};
 var AD_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
+
+// ══════════════════════════════════════════
+//  DUET / GROUP SINGING HELPER
+// ══════════════════════════════════════════
+function getActiveMembers() {
+    var active = [];
+    for (var n in memberIntervals) {
+        if (memberIntervals[n]) active.push(n);
+    }
+    return active;
+}
+
+function getGradientForActive(colors) {
+    if (!colors || colors.length === 0) return '';
+    if (colors.length === 1) return colors[0];
+    var stops = colors.map(function(c, i) {
+        var pct = (i / (colors.length - 1)) * 100;
+        return c + ' ' + pct + '%';
+    });
+    return 'linear-gradient(90deg, ' + stops.join(', ') + ')';
+}
+
+function getAverageColor(colors) {
+    if (!colors || colors.length === 0) return '#a78bfa';
+    if (colors.length === 1) return colors[0];
+    var r = 0,
+        g = 0,
+        b = 0;
+    for (var i = 0; i < colors.length; i++) {
+        var hex = colors[i].replace('#', '');
+        var bigint = parseInt(hex, 16);
+        r += (bigint >> 16) & 255;
+        g += (bigint >> 8) & 255;
+        b += bigint & 255;
+    }
+    r = Math.round(r / colors.length);
+    g = Math.round(g / colors.length);
+    b = Math.round(b / colors.length);
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+function getMultiShadow(colors, intensity) {
+    if (intensity === undefined) intensity = 0.5;
+    if (!colors || colors.length === 0) return '';
+    return colors.map(function(c) {
+        var alpha = Math.round(intensity * 80).toString(16).padStart(2, '0');
+        return '0 0 12px 2px ' + c + alpha;
+    }).join(', ');
+}
 
 // ══════════════════════════════════════════
 //  TOAST & CONFIRM & PROMPT
@@ -337,7 +386,7 @@ function renderMemberCard(n, c, p, d) {
     card.style.borderLeftColor = c;
     card.style.setProperty('--pulse-color', c + '66');
     card.dataset.name = n;
-    card.innerHTML = '\n        <div class="member-card-inner">\n            <span class="rank-num">1</span>\n            <img src="' + p + '" class="member-avatar"\n                 style="border-color:' + c + '; box-shadow:0 0 10px 2px ' + c + '44; transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);"\n                 onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            <div class="member-text">\n                <div class="member-name-row">\n                    <span class="member-name">' + n + '</span>\n                    <div class="member-time-wrap">\n                        <span class="rec-dot" style="margin-right:4px;"></span>\n                        <span class="member-time" id="time-' + CSS.escape(n) + '">' + d.toFixed(1) + 's</span>\n                    </div>\n                </div>\n                <div class="member-bar-wrap">\n                    <div class="member-bar" id="bar-' + CSS.escape(n) + '"\n                         style="background:linear-gradient(90deg,' + c + '88,' + c + '); transform:scaleX(0); transition: transform 0.15s linear;"></div>\n                </div>\n            </div>\n            <div class="member-actions">\n                <button class="btn-sm" onclick="resetMember(\'' + n + '\')" title="Reset">↺</button>\n                <button class="btn-sm del" onclick="confirmDeleteMember(\'' + n + '\')" title="Delete">✕</button>\n            </div>\n        </div>';
+    card.innerHTML = '\n        <div class="member-card-inner">\n            <span class="rank-num">1</span>\n            <img src="' + p + '" class="member-avatar"\n                 style="border-color:' + c + '; box-shadow:0 0 10px 2px ' + c + '44; transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color 0.5s ease;"\n                 onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            <div class="member-text">\n                <div class="member-name-row">\n                    <span class="member-name">' + n + '</span>\n                    <div class="member-time-wrap">\n                        <span class="rec-dot" style="margin-right:4px;"></span>\n                        <span class="member-time" id="time-' + CSS.escape(n) + '">' + d.toFixed(1) + 's</span>\n                    </div>\n                </div>\n                <div class="member-bar-wrap">\n                    <div class="member-bar" id="bar-' + CSS.escape(n) + '"\n                         style="background:linear-gradient(90deg,' + c + '88,' + c + '); transform:scaleX(0); transition: transform 0.15s linear, background 0.3s ease, box-shadow 0.3s ease;"></div>\n                </div>\n            </div>\n            <div class="member-actions">\n                <button class="btn-sm" onclick="resetMember(\'' + n + '\')" title="Reset">↺</button>\n                <button class="btn-sm del" onclick="confirmDeleteMember(\'' + n + '\')" title="Delete">✕</button>\n            </div>\n        </div>';
     return card;
 }
 
@@ -370,7 +419,7 @@ function applyRankStyles() {
 }
 
 // ══════════════════════════════════════════
-//  UPDATE LEADERBOARD
+//  UPDATE LEADERBOARD — DENGAN DUET / GROUP
 // ══════════════════════════════════════════
 function updateLeaderboardLive() {
     var all = document.querySelectorAll('.member-card');
@@ -381,6 +430,14 @@ function updateLeaderboardLive() {
     }
     if (currentMax < 0.001) currentMax = 0.001;
 
+    // ── DETEKSI DUET ──
+    var activeMembers = getActiveMembers();
+    var isDuet = activeMembers.length >= 2;
+    var duetColors = isDuet ? activeMembers.map(function(n) { return memberColors[n] || '#a78bfa'; }) : [];
+    var avgColor = isDuet ? getAverageColor(duetColors) : null;
+    var gradientBar = isDuet ? getGradientForActive(duetColors) : null;
+    var multiShadow = isDuet ? getMultiShadow(duetColors, 0.6) : '';
+
     for (var j = 0; j < all.length; j++) {
         var card = all[j];
         var n = card.dataset.name;
@@ -388,15 +445,28 @@ function updateLeaderboardLive() {
         if (el) el.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
         var avatar = card.querySelector('.member-avatar');
         var isActive = !!memberIntervals[n];
+        var c = memberColors[n] || '#a78bfa';
+        var isInDuet = isDuet && isActive;
 
+        // ── AVATAR ──
         if (isActive) {
             if (!card.classList.contains('is-active')) {
                 card.classList.add('is-active');
             }
             if (avatar) {
-                avatar.style.transition = 'transform 0.15s ease-out, box-shadow 0.15s ease-out';
-                avatar.style.transform = 'scale(1.18)';
-                avatar.style.boxShadow = '0 0 22px 6px ' + (memberColors[n] || '#a78bfa') + '66';
+                if (isInDuet) {
+                    avatar.style.transition = 'transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out';
+                    avatar.style.transform = 'scale(1.18)';
+                    avatar.style.borderColor = avgColor;
+                    avatar.style.boxShadow = '0 0 22px 6px ' + avgColor + '66, ' + multiShadow;
+                    avatar.dataset.duet = 'true';
+                } else {
+                    avatar.style.transition = 'transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out';
+                    avatar.style.transform = 'scale(1.18)';
+                    avatar.style.borderColor = c;
+                    avatar.style.boxShadow = '0 0 22px 6px ' + c + '66';
+                    avatar.dataset.duet = 'false';
+                }
                 _avatarState[n] = 'active';
             }
         } else {
@@ -406,19 +476,35 @@ function updateLeaderboardLive() {
             }
             if (avatar) {
                 if (_avatarState[n] !== 'inactive') {
-                    avatar.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                    avatar.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color 0.5s ease';
                     avatar.style.transform = 'scale(1)';
-                    avatar.style.boxShadow = '0 0 10px 2px ' + (memberColors[n] || '#a78bfa') + '44';
+                    avatar.style.borderColor = c;
+                    avatar.style.boxShadow = '0 0 10px 2px ' + c + '44';
                     _avatarState[n] = 'inactive';
                 }
             }
         }
 
+        // ── BAR ──
         var bar = card.querySelector('.member-bar');
         if (bar) {
             var pct = (memberDurations[n] || 0) / currentMax;
             if (pct > 1) pct = 1;
             bar.style.transform = 'scaleX(' + pct + ')';
+
+            if (isInDuet) {
+                bar.style.background = gradientBar;
+                bar.style.boxShadow = '0 0 12px ' + avgColor;
+                bar.style.transition = 'transform 0.15s linear, background 0.3s ease, box-shadow 0.3s ease';
+            } else if (isActive) {
+                bar.style.background = 'linear-gradient(90deg, ' + c + '88, ' + c + ')';
+                bar.style.boxShadow = '';
+                bar.style.transition = 'transform 0.15s linear, background 0.3s ease, box-shadow 0.3s ease';
+            } else {
+                bar.style.background = 'linear-gradient(90deg, ' + c + '88, ' + c + ')';
+                bar.style.boxShadow = '';
+                bar.style.transition = 'transform 0.15s linear, background 0.3s ease, box-shadow 0.3s ease';
+            }
         }
     }
 }
@@ -1656,7 +1742,7 @@ function clearAllData() {
 }
 
 // ══════════════════════════════════════════
-//  9. PRESENTATION MODE
+//  9. PRESENTATION MODE — DENGAN DUET / GROUP
 // ══════════════════════════════════════════
 function openPresentation() {
     var names = Object.keys(memberDurations);
@@ -1724,106 +1810,6 @@ function syncPresentationMedia() {
     showToast('⏱ Synced');
 }
 
-// ── HANYA SATU DEFINISI reorderPresentationBars ──
-function reorderPresentationBars() {
-    if (_pressReorderPending) return;
-    _pressReorderPending = true;
-    requestAnimationFrame(function() {
-        var container = document.getElementById('pressBars');
-        var rows = container ? container.children : [];
-        if (rows.length === 0) {
-            _pressReorderPending = false;
-            return;
-        }
-
-        var sortedNames = Object.keys(memberDurations).slice().sort(function(a, b) {
-            return memberDurations[b] - memberDurations[a];
-        });
-
-        // Cek apakah urutan saat ini sama dengan urutan baru
-        var currentOrder = [];
-        for (var i = 0; i < rows.length; i++) {
-            currentOrder.push(rows[i].dataset.name);
-        }
-        var same = true;
-        if (currentOrder.length === sortedNames.length) {
-            for (var j = 0; j < sortedNames.length; j++) {
-                if (currentOrder[j] !== sortedNames[j]) {
-                    same = false;
-                    break;
-                }
-            }
-        } else {
-            same = false;
-        }
-        if (same) {
-            _pressReorderPending = false;
-            return;
-        }
-
-        // ── FLIP: catat posisi awal ──
-        var firstRects = {};
-        for (var k = 0; k < rows.length; k++) {
-            firstRects[rows[k].dataset.name] = rows[k].getBoundingClientRect();
-        }
-
-        // ── Reorder DOM ──
-        for (var l = 0; l < sortedNames.length; l++) {
-            var n = sortedNames[l];
-            var row = null;
-            for (var m = 0; m < rows.length; m++) {
-                if (rows[m].dataset.name === n) {
-                    row = rows[m];
-                    break;
-                }
-            }
-            if (row) container.appendChild(row);
-        }
-
-        // ── FLIP: animasi ──
-        for (var o = 0; o < sortedNames.length; o++) {
-            var name = sortedNames[o];
-            var row2 = null;
-            for (var p = 0; p < rows.length; p++) {
-                if (rows[p].dataset.name === name) {
-                    row2 = rows[p];
-                    break;
-                }
-            }
-            if (!row2) continue;
-            var first = firstRects[name];
-            var last = row2.getBoundingClientRect();
-            if (!first) continue;
-            var dy = first.top - last.top;
-            if (Math.abs(dy) < 1) continue;
-
-            row2.style.transition = 'transform 0s';
-            row2.style.transform = 'translateY(' + dy + 'px)';
-
-            requestAnimationFrame(function(rowRef) {
-                return function() {
-                    requestAnimationFrame(function() {
-                        rowRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                        rowRef.style.transform = '';
-                        // Reset style setelah animasi selesai
-                        setTimeout(function() {
-                            rowRef.style.transition = '';
-                            rowRef.style.transform = '';
-                        }, 600);
-                    });
-                };
-            }(row2));
-        }
-
-        // Reset flag setelah animasi selesai (600ms)
-        setTimeout(function() {
-            _pressReorderPending = false;
-        }, 600);
-    });
-}
-
-function pressId(prefix, name) { return prefix + name.replace(/[^a-zA-Z0-9]/g, '_'); }
-
 function renderPresentationBars() {
     var container = document.getElementById('pressBars');
     container.innerHTML = '';
@@ -1861,6 +1847,8 @@ function renderPresentationBars() {
     }
 }
 
+function pressId(prefix, name) { return prefix + name.replace(/[^a-zA-Z0-9]/g, '_'); }
+
 function updatePresentationLive() {
     var overlay = document.getElementById('presentationOverlay');
     if (!overlay || overlay.style.display === 'none') return;
@@ -1877,6 +1865,15 @@ function updatePresentationLive() {
     for (var ai = 0; ai < adItems.length; ai++) {
         adNames.push(adItems[ai].dataset.name);
     }
+
+    // ── DETEKSI DUET ──
+    var activeMembers = getActiveMembers();
+    var isDuet = activeMembers.length >= 2;
+    var duetColors = isDuet ? activeMembers.map(function(m) { return memberColors[m] || '#a78bfa'; }) : [];
+    var avgColor = isDuet ? getAverageColor(duetColors) : null;
+    var gradientBar = isDuet ? getGradientForActive(duetColors) : null;
+    var multiShadow = isDuet ? getMultiShadow(duetColors, 0.5) : '';
+
     for (var j = 0; j < rows.length; j++) {
         var row = rows[j];
         var n = row.dataset.name;
@@ -1886,27 +1883,56 @@ function updatePresentationLive() {
         var c = memberColors[n] || '#a78bfa';
         var isRecording = !!memberIntervals[n];
         var isAdlib = adNames.indexOf(n) !== -1;
+        var isInDuet = isDuet && isRecording;
+
+        // ── BAR ──
         if (bar) {
             var pct = (memberDurations[n] || 0) / maxDur;
             if (pct > 1) pct = 1;
             bar.style.transform = 'scaleX(' + pct + ')';
-            if (isAdlib) {
+            if (isInDuet) {
+                bar.style.background = gradientBar;
+                bar.style.boxShadow = '0 0 12px ' + avgColor;
+                bar.style.transition = 'transform 0.1s linear, background 0.3s ease, box-shadow 0.3s ease';
+            } else if (isAdlib) {
                 bar.style.background = 'linear-gradient(90deg, #4ade80, #22d3ee)';
                 bar.style.boxShadow = '0 0 12px #4ade80';
+                bar.style.transition = 'transform 0.1s linear, background 0.3s ease, box-shadow 0.3s ease';
             } else {
                 bar.style.background = 'linear-gradient(90deg, ' + c + '99, ' + c + ')';
                 bar.style.boxShadow = '';
+                bar.style.transition = 'transform 0.1s linear, background 0.3s ease, box-shadow 0.3s ease';
             }
         }
         if (time) time.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
+
+        // ── AVATAR ──
         if (avatar) {
-            avatar.style.transform = isRecording ? 'scale(1.15)' : 'scale(1)';
-            avatar.style.boxShadow = isRecording ? '0 0 28px 8px ' + c + '99' : (isAdlib ? '0 0 28px 8px rgba(74,222,128,0.7)' : '0 0 14px 2px ' + c + '44');
-            avatar.style.borderColor = isAdlib ? '#4ade80' : c;
+            if (isInDuet) {
+                avatar.style.transition = 'transform 0.2s ease, box-shadow 0.3s ease, border-color 0.3s ease';
+                avatar.style.transform = 'scale(1.15)';
+                avatar.style.boxShadow = '0 0 28px 8px ' + avgColor + ', ' + multiShadow;
+                avatar.style.borderColor = avgColor;
+            } else if (isRecording) {
+                avatar.style.transition = 'transform 0.2s ease, box-shadow 0.3s ease, border-color 0.3s ease';
+                avatar.style.transform = 'scale(1.15)';
+                avatar.style.boxShadow = '0 0 28px 8px ' + c + '99';
+                avatar.style.borderColor = c;
+            } else if (isAdlib) {
+                avatar.style.transition = 'transform 0.2s ease, box-shadow 0.3s ease, border-color 0.3s ease';
+                avatar.style.transform = 'scale(1)';
+                avatar.style.boxShadow = '0 0 28px 8px rgba(74,222,128,0.7)';
+                avatar.style.borderColor = '#4ade80';
+            } else {
+                avatar.style.transition = 'transform 0.2s ease, box-shadow 0.3s ease, border-color 0.3s ease';
+                avatar.style.transform = 'scale(1)';
+                avatar.style.boxShadow = '0 0 14px 2px ' + c + '44';
+                avatar.style.borderColor = c;
+            }
         }
     }
 
-    // ── Cek apakah urutan perlu di-reorder ──
+    // ── CEK URUTAN DAN REORDER JIKA PERLU ──
     var curRows = container.children;
     var curOrder = [];
     for (var ci = 0; ci < curRows.length; ci++) {
@@ -1921,6 +1947,97 @@ function updatePresentationLive() {
     if (needReorder) {
         reorderPresentationBars();
     }
+}
+
+function reorderPresentationBars() {
+    if (_pressReorderPending) return;
+    _pressReorderPending = true;
+    requestAnimationFrame(function() {
+        var container = document.getElementById('pressBars');
+        var rows = container ? container.children : [];
+        if (rows.length === 0) {
+            _pressReorderPending = false;
+            return;
+        }
+
+        var sortedNames = Object.keys(memberDurations).slice().sort(function(a, b) {
+            return memberDurations[b] - memberDurations[a];
+        });
+
+        var currentOrder = [];
+        for (var i = 0; i < rows.length; i++) {
+            currentOrder.push(rows[i].dataset.name);
+        }
+        var same = true;
+        if (currentOrder.length === sortedNames.length) {
+            for (var j = 0; j < sortedNames.length; j++) {
+                if (currentOrder[j] !== sortedNames[j]) {
+                    same = false;
+                    break;
+                }
+            }
+        } else {
+            same = false;
+        }
+        if (same) {
+            _pressReorderPending = false;
+            return;
+        }
+
+        var firstRects = {};
+        for (var k = 0; k < rows.length; k++) {
+            firstRects[rows[k].dataset.name] = rows[k].getBoundingClientRect();
+        }
+
+        for (var l = 0; l < sortedNames.length; l++) {
+            var n = sortedNames[l];
+            var row = null;
+            for (var m = 0; m < rows.length; m++) {
+                if (rows[m].dataset.name === n) {
+                    row = rows[m];
+                    break;
+                }
+            }
+            if (row) container.appendChild(row);
+        }
+
+        for (var o = 0; o < sortedNames.length; o++) {
+            var name = sortedNames[o];
+            var row2 = null;
+            for (var p = 0; p < rows.length; p++) {
+                if (rows[p].dataset.name === name) {
+                    row2 = rows[p];
+                    break;
+                }
+            }
+            if (!row2) continue;
+            var first = firstRects[name];
+            var last = row2.getBoundingClientRect();
+            if (!first) continue;
+            var dy = first.top - last.top;
+            if (Math.abs(dy) < 1) continue;
+
+            row2.style.transition = 'transform 0s';
+            row2.style.transform = 'translateY(' + dy + 'px)';
+
+            requestAnimationFrame(function(rowRef) {
+                return function() {
+                    requestAnimationFrame(function() {
+                        rowRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        rowRef.style.transform = '';
+                        setTimeout(function() {
+                            rowRef.style.transition = '';
+                            rowRef.style.transform = '';
+                        }, 600);
+                    });
+                };
+            }(row2));
+        }
+
+        setTimeout(function() {
+            _pressReorderPending = false;
+        }, 600);
+    });
 }
 
 // ══════════════════════════════════════════
