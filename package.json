@@ -1,0 +1,9 @@
+{
+  "name": "linedistro-pro",
+  "version": "1.0.0",
+  "description": "Line Distribution calculator with Genius lyrics",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12"
+  }
+}
