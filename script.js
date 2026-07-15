@@ -107,6 +107,8 @@ var historyIndex = -1;
 var _reorderPending = false;
 var _avatarState = {};
 var _pressReorderPending = false;
+var _timelineInterval = null;
+var _currentVolume = 0.8;
 
 // ── AD-LIBS HOLD ──
 var activeAdLibKeys = new Set();
@@ -430,7 +432,6 @@ function updateLeaderboardLive() {
     }
     if (currentMax < 0.001) currentMax = 0.001;
 
-    // ── DETEKSI DUET ──
     var activeMembers = getActiveMembers();
     var isDuet = activeMembers.length >= 2;
     var duetColors = isDuet ? activeMembers.map(function(n) { return memberColors[n] || '#a78bfa'; }) : [];
@@ -448,7 +449,6 @@ function updateLeaderboardLive() {
         var c = memberColors[n] || '#a78bfa';
         var isInDuet = isDuet && isActive;
 
-        // ── AVATAR ──
         if (isActive) {
             if (!card.classList.contains('is-active')) {
                 card.classList.add('is-active');
@@ -485,7 +485,6 @@ function updateLeaderboardLive() {
             }
         }
 
-        // ── BAR ──
         var bar = card.querySelector('.member-bar');
         if (bar) {
             var pct = (memberDurations[n] || 0) / currentMax;
@@ -875,10 +874,11 @@ function deleteSelectedPreset() {
 }
 
 // ══════════════════════════════════════════
-//  5. MEDIA + AUTO-DETECT + YOUTUBE RETRY
+//  5. MEDIA + AUTO-DETECT + YOUTUBE RETRY + VOLUME + PROGRESS
 // ══════════════════════════════════════════
 var _ytRetryCount = 0;
 var _ytRetryMax = 3;
+var _mediaUpdateInterval = null;
 
 function loadLocalMedia(input) {
     var file = input.files[0];
@@ -896,13 +896,16 @@ function loadLocalMedia(input) {
         vid.style.display = 'block';
         vid.load();
         lbl.textContent = '🎬 ' + file.name;
+        applyVolumeToMedia(vid);
     } else if (file.type.indexOf('audio/') === 0) {
         aud.src = url;
         aud.style.display = 'block';
         aud.load();
         lbl.textContent = '🎵 ' + file.name;
+        applyVolumeToMedia(aud);
     } else { showToast('⚠️ Format tidak didukung'); return; }
     detectSongFromFile(file);
+    startMediaProgressUpdate();
 }
 
 function loadVideo() {
@@ -910,6 +913,10 @@ function loadVideo() {
     var match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&]{11})/);
     var v = match ? match[1] : null;
     if (!v) { showToast('⚠️ Link YouTube tidak valid'); return; }
+
+    // Hentikan progress update sebelumnya
+    stopMediaProgressUpdate();
+
     document.getElementById('localMedia').style.display = 'none';
     document.getElementById('audioPlayer').style.display = 'none';
     document.getElementById('mediaLabel').textContent = '';
@@ -919,12 +926,16 @@ function loadVideo() {
     _ytRetryCount = 0;
     loadYoutubeVideo(v);
     detectSongFromYouTube(url);
+
+    // Mulai progress update untuk player baru
+    startMediaProgressUpdate();
 }
 
 function loadYoutubeVideo(videoId) {
     if (window.ytPlayer) {
         try {
             window.ytPlayer.loadVideoById(videoId);
+            applyVolumeToYT(_currentVolume);
         } catch (e) {
             console.warn('YouTube load error, retrying...', e);
             retryYoutubeLoad(videoId);
@@ -936,7 +947,8 @@ function loadYoutubeVideo(videoId) {
                 width: '100%',
                 videoId: videoId,
                 events: {
-                    onError: function() { retryYoutubeLoad(videoId); }
+                    onError: function() { retryYoutubeLoad(videoId); },
+                    onReady: function() { applyVolumeToYT(_currentVolume); }
                 }
             });
         } else {
@@ -958,6 +970,7 @@ function retryYoutubeLoad(videoId) {
         if (window.ytPlayer) {
             try {
                 window.ytPlayer.loadVideoById(videoId);
+                applyVolumeToYT(_currentVolume);
             } catch (e) {
                 retryYoutubeLoad(videoId);
             }
@@ -992,6 +1005,77 @@ function getCurrentPlayerTime() {
     if (aud.style.display !== 'none' && aud.currentTime) return aud.currentTime;
     if (window.ytPlayer && window.ytPlayer.getCurrentTime) return window.ytPlayer.getCurrentTime();
     return 0;
+}
+
+// ── VOLUME CONTROL ──
+function applyVolumeToMedia(el) {
+    if (el) el.volume = _currentVolume;
+}
+
+function applyVolumeToYT(vol) {
+    if (window.ytPlayer && window.ytPlayer.setVolume) {
+        window.ytPlayer.setVolume(Math.round(vol * 100));
+    }
+}
+
+function setVolume(vol) {
+    _currentVolume = Math.max(0, Math.min(1, vol));
+    var vid = document.getElementById('localMedia');
+    var aud = document.getElementById('audioPlayer');
+    if (vid.style.display !== 'none') vid.volume = _currentVolume;
+    if (aud.style.display !== 'none') aud.volume = _currentVolume;
+    applyVolumeToYT(_currentVolume);
+    var label = document.getElementById('volumeLabel');
+    if (label) label.textContent = Math.round(_currentVolume * 100) + '%';
+}
+
+// ── PROGRESS BAR ──
+function startMediaProgressUpdate() {
+    if (_mediaUpdateInterval) clearInterval(_mediaUpdateInterval);
+    _mediaUpdateInterval = setInterval(updateMediaProgress, 300);
+}
+
+function stopMediaProgressUpdate() {
+    if (_mediaUpdateInterval) {
+        clearInterval(_mediaUpdateInterval);
+        _mediaUpdateInterval = null;
+    }
+}
+
+function updateMediaProgress() {
+    var current = getCurrentPlayerTime();
+    var duration = getPlayerDuration();
+    var fill = document.getElementById('mediaProgressFill');
+    var currentDisplay = document.getElementById('currentTimeDisplay');
+    var durationDisplay = document.getElementById('durationDisplay');
+
+    if (fill) {
+        var pct = duration > 0 ? (current / duration * 100) : 0;
+        fill.style.width = Math.min(pct, 100) + '%';
+    }
+    if (currentDisplay) currentDisplay.textContent = formatTime(current);
+    if (durationDisplay) durationDisplay.textContent = formatTime(duration);
+
+    // Update timeline marker if result modal is open
+    if (document.getElementById('resultModal').style.display === 'flex') {
+        updateTimelineProgress(current);
+    }
+}
+
+function getPlayerDuration() {
+    var vid = document.getElementById('localMedia');
+    var aud = document.getElementById('audioPlayer');
+    if (vid.style.display !== 'none' && vid.duration) return vid.duration;
+    if (aud.style.display !== 'none' && aud.duration) return aud.duration;
+    if (window.ytPlayer && window.ytPlayer.getDuration) return window.ytPlayer.getDuration() || 0;
+    return 0;
+}
+
+function formatTime(seconds) {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    var m = Math.floor(seconds / 60);
+    var s = Math.floor(seconds % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
 }
 
 // ══════════════════════════════════════════
@@ -1157,7 +1241,7 @@ function finish() {
         if (existing) existing.remove();
         var timelineContainer = document.createElement('div');
         timelineContainer.id = 'timelineContainer';
-        timelineContainer.style.cssText = 'margin-top:20px; padding:10px 0;';
+        timelineContainer.style.cssText = 'margin-top:20px; padding:10px 0; position:relative;';
         var label = document.createElement('p');
         label.style.cssText = 'color:var(--text2);font-size:12px;margin-bottom:8px;';
         label.textContent = '⏱ Timeline (member active)';
@@ -1165,11 +1249,25 @@ function finish() {
         var canvas = document.createElement('canvas');
         canvas.width = 560;
         canvas.height = 80;
-        canvas.style.cssText = 'width:100%; height:auto; background:var(--bg3); border-radius:8px;';
+        canvas.style.cssText = 'width:100%; height:auto; background:var(--bg3); border-radius:8px; display:block;';
         timelineContainer.appendChild(canvas);
         modalBox.appendChild(timelineContainer);
-        var totalDuration = getCurrentPlayerTime() || 60;
-        drawTimeline(canvas, totalDuration);
+        var totalDuration = getPlayerDuration() || 60;
+        drawTimeline(canvas, totalDuration, getCurrentPlayerTime());
+
+        // Simpan referensi untuk update live
+        window._timelineCanvas = canvas;
+        window._timelineDuration = totalDuration;
+
+        if (_timelineInterval) clearInterval(_timelineInterval);
+        _timelineInterval = setInterval(function() {
+            if (document.getElementById('resultModal').style.display === 'flex') {
+                updateTimelineProgress(getCurrentPlayerTime());
+            } else {
+                clearInterval(_timelineInterval);
+                _timelineInterval = null;
+            }
+        }, 500);
     }, 300);
 
     // ── RESET ALL TIMESTAMPS AFTER FINISH ──
@@ -1190,7 +1288,7 @@ function resetAllTimestamps() {
     showToast('🔄 All timestamps reset');
 }
 
-function drawTimeline(canvas, totalDuration) {
+function drawTimeline(canvas, totalDuration, currentTime) {
     var ctx = canvas.getContext('2d');
     var w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
@@ -1225,9 +1323,42 @@ function drawTimeline(canvas, totalDuration) {
             ctx.fillText(seg.member, startX + width/2, y - 4);
         }
     }
+
+    // ── Marker posisi sekarang ──
+    if (currentTime !== undefined && currentTime > 0 && totalDuration > 0) {
+        var markerX = padding + (currentTime / totalDuration) * (w - padding*2);
+        ctx.beginPath();
+        ctx.moveTo(markerX, y - 4);
+        ctx.lineTo(markerX, y + barHeight + 4);
+        ctx.strokeStyle = '#ff4d4d';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#ff4d4d';
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // Segitiga di atas
+        ctx.beginPath();
+        ctx.moveTo(markerX - 5, y - 4);
+        ctx.lineTo(markerX, y - 10);
+        ctx.lineTo(markerX + 5, y - 4);
+        ctx.fillStyle = '#ff4d4d';
+        ctx.fill();
+    }
 }
 
-function closeResultModal() { document.getElementById('resultModal').style.display = 'none'; }
+function updateTimelineProgress(currentTime) {
+    if (window._timelineCanvas && window._timelineDuration) {
+        drawTimeline(window._timelineCanvas, window._timelineDuration, currentTime);
+    }
+}
+
+function closeResultModal() {
+    document.getElementById('resultModal').style.display = 'none';
+    if (_timelineInterval) {
+        clearInterval(_timelineInterval);
+        _timelineInterval = null;
+    }
+}
 
 // ══════════════════════════════════════════
 //  7. HISTORY — delete button always visible
@@ -1351,7 +1482,6 @@ function openHistory() {
                 var member = entry.members[k];
                 membersHtml += '\n                            <div class="rank-item" style="border-left-color:' + member.color + '; cursor:pointer;" onclick="openMemberStats(\'' + member.name.replace(/'/g, "\\'") + '\')">\n                                <div class="rank-name">\n                                    <img src="' + member.photo + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;"\n                                         onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(member.name) + '\'">\n                                    <span class="rank-badge">' + (k + 1) + '</span>\n                                    <span>' + member.name + '</span>\n                                </div>\n                                <div class="rank-meta">\n                                    <span class="rank-time">' + member.duration.toFixed(1) + 's</span>\n                                    <span class="rank-pct">' + member.pct + '%</span>\n                                    <span style="color:var(--text3);font-size:11px;margin-left:4px;">📈</span>\n                                </div>\n                            </div>';
             }
-            // ── DELETE BUTTON SELALU TERLIHAT ──
             card.innerHTML = '\n                <div class="history-card-header" onclick="toggleHistoryDetail(' + entry.id + ')">\n                    <div>\n                        <div class="history-card-title">🎵 ' + entry.title + '</div>\n                        <div class="history-card-meta">' + entry.date + ' · Total ' + entry.totalDuration.toFixed(1) + 's</div>\n                    </div>\n                    <div style="display:flex;align-items:center;gap:6px;">\n                        <div class="history-avatars">\n                            ' + avatarsHtml + '\n                            ' + moreHtml + '\n                        </div>\n                        <span class="history-chevron" id="chev-' + entry.id + '">▾</span>\n                    </div>\n                </div>\n                <div class="history-detail" id="detail-' + entry.id + '">\n                    <div style="padding-top:10px; display:flex; flex-direction:column; gap:6px;">\n                        ' + membersHtml + '\n                    </div>\n                </div>\n                <div style="padding:8px 16px 14px; border-top:1px solid var(--border);">\n                    <button class="btn-danger-soft" style="width:100%;justify-content:center;"\n                            onclick="confirmDeleteHistoryEntry(' + entry.id + ')">🗑 Delete Entry</button>\n                </div>';
             container.appendChild(card);
         }
@@ -1742,6 +1872,142 @@ function clearAllData() {
 }
 
 // ══════════════════════════════════════════
+//  MULTI-PROJECT (FITUR 1)
+// ══════════════════════════════════════════
+function getProjects() {
+    try {
+        return JSON.parse(localStorage.getItem('linedistro_projects') || '[]');
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveProjects(projects) {
+    localStorage.setItem('linedistro_projects', JSON.stringify(projects));
+}
+
+function openProjectModal() {
+    renderProjectList();
+    document.getElementById('projectModal').style.display = 'flex';
+}
+
+function closeProjectModal() {
+    document.getElementById('projectModal').style.display = 'none';
+}
+
+function renderProjectList() {
+    var container = document.getElementById('projectList');
+    var projects = getProjects();
+    container.innerHTML = '';
+    if (projects.length === 0) {
+        container.innerHTML = '<p style="color:var(--text3);text-align:center;padding:20px 0;font-size:13px;">No projects saved yet.</p>';
+        return;
+    }
+    for (var i = projects.length - 1; i >= 0; i--) {
+        var proj = projects[i];
+        var div = document.createElement('div');
+        div.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg3);border-radius:6px;margin-bottom:6px;border-left:3px solid var(--purple);';
+        div.innerHTML = '\n            <div>\n                <div style="font-weight:600;font-size:14px;">' + proj.name + '</div>\n                <div style="font-size:11px;color:var(--text3);">' + proj.songTitle + ' · ' + new Date(proj.timestamp).toLocaleDateString() + '</div>\n            </div>\n            <div style="display:flex;gap:6px;">\n                <button class="btn-sm" onclick="loadProject(\'' + proj.id + '\')" title="Load">📂</button>\n                <button class="btn-sm del" onclick="deleteProject(\'' + proj.id + '\')" title="Delete">✕</button>\n            </div>';
+        container.appendChild(div);
+    }
+}
+
+function saveCurrentProject() {
+    var nameInput = document.getElementById('projectNameInput');
+    var name = nameInput.value.trim();
+    if (!name) { showToast('⚠️ Please enter a project name'); return; }
+
+    var projects = getProjects();
+    // Cek duplikat
+    for (var i = 0; i < projects.length; i++) {
+        if (projects[i].name.toLowerCase() === name.toLowerCase()) {
+            showConfirm({
+                icon: '⚠️',
+                title: 'Project already exists',
+                msg: 'A project with this name already exists. Do you want to overwrite it?',
+                okLabel: 'Overwrite',
+                okClass: 'btn-primary',
+                onOk: function() {
+                    // Hapus yang lama
+                    projects = projects.filter(function(p) { return p.name.toLowerCase() !== name.toLowerCase(); });
+                    doSaveProject(projects, name);
+                }
+            });
+            return;
+        }
+    }
+    doSaveProject(projects, name);
+}
+
+function doSaveProject(projects, name) {
+    var project = {
+        id: Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
+        name: name,
+        songTitle: document.getElementById('songTitle').value || 'Untitled',
+        timestamp: Date.now(),
+        data: {
+            durations: memberDurations,
+            colors: memberColors,
+            photos: memberPhotos,
+            timeline: timelineData
+        }
+    };
+    projects.push(project);
+    saveProjects(projects);
+    document.getElementById('projectNameInput').value = '';
+    renderProjectList();
+    showToast('💾 Project "' + name + '" saved');
+}
+
+function loadProject(id) {
+    var projects = getProjects();
+    var project = null;
+    for (var i = 0; i < projects.length; i++) {
+        if (projects[i].id === id) { project = projects[i]; break; }
+    }
+    if (!project) { showToast('⚠️ Project not found'); return; }
+
+    showConfirm({
+        icon: '📂',
+        title: 'Load "' + project.name + '"?',
+        msg: 'This will replace your current session. Unsaved changes will be lost.',
+        okLabel: 'Load',
+        okClass: 'btn-primary',
+        onOk: function() {
+            var data = project.data;
+            memberDurations = data.durations || {};
+            memberColors = data.colors || {};
+            memberPhotos = data.photos || {};
+            timelineData = data.timeline || [];
+            document.getElementById('songTitle').value = project.songTitle || '';
+            savePhotoCache();
+            reloadMemberStrip();
+            reloadMemberList();
+            updateTotalDuration();
+            updateLeaderboardLive();
+            closeProjectModal();
+            showToast('✅ Project "' + project.name + '" loaded');
+        }
+    });
+}
+
+function deleteProject(id) {
+    showConfirm({
+        icon: '🗑',
+        title: 'Delete this project?',
+        msg: 'This project will be permanently deleted.',
+        okLabel: 'Delete',
+        okClass: 'btn-danger',
+        onOk: function() {
+            var projects = getProjects().filter(function(p) { return p.id !== id; });
+            saveProjects(projects);
+            renderProjectList();
+            showToast('🗑 Project deleted');
+        }
+    });
+}
+
+// ══════════════════════════════════════════
 //  9. PRESENTATION MODE — DENGAN DUET / GROUP
 // ══════════════════════════════════════════
 function openPresentation() {
@@ -1866,7 +2132,6 @@ function updatePresentationLive() {
         adNames.push(adItems[ai].dataset.name);
     }
 
-    // ── DETEKSI DUET ──
     var activeMembers = getActiveMembers();
     var isDuet = activeMembers.length >= 2;
     var duetColors = isDuet ? activeMembers.map(function(m) { return memberColors[m] || '#a78bfa'; }) : [];
@@ -1885,7 +2150,6 @@ function updatePresentationLive() {
         var isAdlib = adNames.indexOf(n) !== -1;
         var isInDuet = isDuet && isRecording;
 
-        // ── BAR ──
         if (bar) {
             var pct = (memberDurations[n] || 0) / maxDur;
             if (pct > 1) pct = 1;
@@ -1906,7 +2170,6 @@ function updatePresentationLive() {
         }
         if (time) time.textContent = (memberDurations[n] || 0).toFixed(1) + 's';
 
-        // ── AVATAR ──
         if (avatar) {
             if (isInDuet) {
                 avatar.style.transition = 'transform 0.2s ease, box-shadow 0.3s ease, border-color 0.3s ease';
@@ -1932,7 +2195,6 @@ function updatePresentationLive() {
         }
     }
 
-    // ── CEK URUTAN DAN REORDER JIKA PERLU ──
     var curRows = container.children;
     var curOrder = [];
     for (var ci = 0; ci < curRows.length; ci++) {
@@ -2044,7 +2306,6 @@ function reorderPresentationBars() {
 //  10. INIT
 // ══════════════════════════════════════════
 window.onload = function() {
-    // Reset agar tidak ada member tersisa dari sesi sebelumnya (kecuali auto-save)
     memberDurations = {};
     memberColors = {};
     memberPhotos = {};
@@ -2065,6 +2326,19 @@ window.onload = function() {
 
     startAutoSave();
     saveStateForUndo();
+    startMediaProgressUpdate();
+
+    // ── Volume Slider ──
+    var volSlider = document.getElementById('volumeSlider');
+    if (volSlider) {
+        volSlider.value = _currentVolume * 100;
+        var label = document.getElementById('volumeLabel');
+        if (label) label.textContent = Math.round(_currentVolume * 100) + '%';
+        volSlider.addEventListener('input', function(e) {
+            var val = parseFloat(e.target.value) / 100;
+            setVolume(val);
+        });
+    }
 
     var saveEditBtn = document.querySelector('#editModal .btn-primary');
     if (saveEditBtn) {
