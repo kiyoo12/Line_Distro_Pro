@@ -9,60 +9,67 @@ module.exports = async (req, res) => {
         return res.status(400).json({ success: false, error: 'Missing query' });
     }
 
-    // Ambil dari Environment Variable
-    const MUSIXMATCH_API_KEY = process.env.MUSIXMATCH_API_KEY;
-    if (!MUSIXMATCH_API_KEY) {
-        return res.status(500).json({ 
-            success: false, 
-            error: 'Musixmatch API Key not configured. Please add MUSIXMATCH_API_KEY to environment variables.' 
-        });
-    }
-
     try {
-        // 1. Cari lagu
-        const searchRes = await axios.get('https://api.musixmatch.com/ws/1.1/track.search', {
-            params: {
-                q: query,
-                apikey: MUSIXMATCH_API_KEY,
-                page_size: 1,
-                s_track_rating: 'desc',
-                f_has_lyrics: 1
-            }
-        });
-
-        const tracks = searchRes.data.message.body.track_list;
-        if (!tracks || tracks.length === 0) {
-            return res.status(404).json({ success: false, error: 'Song not found' });
+        // Pisahkan artis dan judul
+        let artist = '';
+        let title = query;
+        const parts = query.split(/ - | by | feat\. /i);
+        if (parts.length > 1) {
+            title = parts[0].trim();
+            artist = parts[1].trim();
         }
 
-        const trackId = tracks[0].track.track_id;
-        const title = tracks[0].track.track_name;
-        const artist = tracks[0].track.artist_name;
+        console.log(`🔍 Searching: ${title} - ${artist || 'unknown'}`);
 
-        console.log(`🎵 Found: ${title} - ${artist}`);
+        // ── PAKAI lyrics.ovh (GRATIS, NO API KEY) ──
+        const url = artist 
+            ? `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`
+            : `https://api.lyrics.ovh/v1//${encodeURIComponent(title)}`;
 
-        // 2. Ambil lirik
-        const lyricRes = await axios.get('https://api.musixmatch.com/ws/1.1/track.lyrics.get', {
-            params: {
-                track_id: trackId,
-                apikey: MUSIXMATCH_API_KEY
+        const response = await axios.get(url, { timeout: 10000 });
+
+        if (response.data && response.data.lyrics) {
+            let lyrics = response.data.lyrics;
+            lyrics = lyrics
+                .replace(/\[[^\]]*\]/g, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+
+            if (lyrics.length > 10) {
+                return res.json({
+                    success: true,
+                    lyrics: lyrics,
+                    artist: artist || 'Unknown',
+                    title: title
+                });
             }
-        });
-
-        const lyrics = lyricRes.data.message.body.lyrics.lyrics_body;
-        if (!lyrics) {
-            return res.status(404).json({ success: false, error: 'Lyrics not found' });
         }
 
-        res.json({
-            success: true,
-            lyrics: lyrics,
-            title: title,
-            artist: artist
-        });
+        // ── FALLBACK: COBA TANPA ARTIS ──
+        const fallbackRes = await axios.get(`https://api.lyrics.ovh/v1//${encodeURIComponent(query)}`, { timeout: 10000 });
+        if (fallbackRes.data && fallbackRes.data.lyrics) {
+            let lyrics = fallbackRes.data.lyrics;
+            lyrics = lyrics
+                .replace(/\[[^\]]*\]/g, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+
+            if (lyrics.length > 10) {
+                return res.json({
+                    success: true,
+                    lyrics: lyrics,
+                    title: query
+                });
+            }
+        }
+
+        res.status(404).json({ success: false, error: 'Lyrics not found' });
 
     } catch (error) {
         console.error('❌ Error:', error.message);
+        if (error.response) {
+            console.error('📦 Status:', error.response.status);
+        }
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to fetch lyrics'
