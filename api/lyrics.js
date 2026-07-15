@@ -56,6 +56,16 @@ module.exports = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Lyrics not found' });
         }
 
+        } catch (error) {
+    console.error('🔴 Error detail:', error.message);
+    console.error('🔴 Full error:', error);
+    res.status(500).json({ 
+        success: false, 
+        error: error.message,
+        detail: error.response?.data || 'No additional details'
+    });
+}
+
         res.json({ success: true, lyrics: lyrics });
     } catch (error) {
         console.error(error);
