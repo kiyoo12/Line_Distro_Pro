@@ -115,9 +115,10 @@ var activeAdLibKeys = new Set();
 var adLibIntervals = {};
 var AD_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
 
-// ── LYRICS (STATIS) ──
+// ── LYRICS ──
 var _lyricsData = [];
 var _lyricsActiveIndex = -1;
+var _lyricsUpdateInterval = null;
 
 // ══════════════════════════════════════════
 //  DUET / GROUP SINGING HELPER
@@ -2264,8 +2265,134 @@ function reorderPresentationBars() {
 }
 
 // ══════════════════════════════════════════
-//  LYRICS (STATIS) — SEARCH & UPLOAD .LRC
+//  LYRICS — SYNC DENGAN HOLD MEMBER (HANYA DI AREA LYRICS)
 // ══════════════════════════════════════════
+
+// ── Render lirik ──
+function renderLyrics() {
+    var container = document.getElementById('lyricsContainer');
+    if (!container) return;
+
+    var activeMembers = getActiveMembers();
+    var activeDisplay = document.getElementById('activeMemberDisplay');
+    var activeAvatar = document.getElementById('activeMemberAvatar');
+    var activeName = document.getElementById('activeMemberName');
+    var activeLyrics = document.getElementById('activeMemberLyrics');
+
+    // ── UPDATE ACTIVE MEMBER DISPLAY ──
+    if (activeMembers.length > 0 && _lyricsActiveIndex >= 0 && _lyricsActiveIndex < _lyricsData.length) {
+        var firstMember = activeMembers[0];
+        var color = memberColors[firstMember] || '#a78bfa';
+        var currentLyric = _lyricsData[_lyricsActiveIndex]?.text || '';
+
+        activeDisplay.style.display = 'flex';
+        activeDisplay.style.borderLeftColor = color;
+        activeAvatar.src = memberPhotos[firstMember] || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(firstMember) + '&background=random';
+        activeAvatar.style.borderColor = color;
+        activeName.textContent = firstMember;
+        activeName.style.color = color;
+        activeLyrics.textContent = currentLyric;
+
+        if (activeMembers.length >= 2) {
+            activeName.textContent = activeMembers.join(' + ');
+            var avgCol = getAverageColor(activeMembers.map(function(n) { return memberColors[n] || '#a78bfa'; }));
+            activeName.style.color = avgCol;
+        }
+    } else {
+        activeDisplay.style.display = 'none';
+    }
+
+    // ── RENDER LIRIK ──
+    if (_lyricsData.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:var(--text3);padding:30px 0;font-size:12px;">No lyrics loaded.<br>Upload a .lrc file or click 🔍 Search to fetch from online.</div>';
+        return;
+    }
+
+    var activeColors = activeMembers.map(function(n) { return memberColors[n] || '#a78bfa'; });
+    var isDuet = activeMembers.length >= 2;
+    var avgColor = isDuet ? getAverageColor(activeColors) : (activeColors[0] || '#ffffff');
+    var isActive = activeMembers.length > 0;
+
+    var html = '';
+    for (var i = 0; i < _lyricsData.length; i++) {
+        var l = _lyricsData[i];
+        var cls = 'lyric-line';
+        var style = '';
+        var isCurrent = (i === _lyricsActiveIndex);
+
+        if (isCurrent && isActive) {
+            cls += ' active';
+            var scale = isDuet ? 'scale(1.15)' : 'scale(1.2)';
+            var shadow = isDuet ? '0 0 20px ' + avgColor + '55' : '0 0 20px ' + activeColors[0] + '55';
+            if (isDuet) {
+                style = 'color:white; background:' + avgColor + '33; border-left:3px solid ' + avgColor + '; transform:' + scale + '; box-shadow:' + shadow + '; padding:6px 12px; margin:4px 0; border-radius:8px;';
+            } else {
+                style = 'color:white; background:' + activeColors[0] + '33; border-left:3px solid ' + activeColors[0] + '; transform:' + scale + '; box-shadow:' + shadow + '; padding:6px 12px; margin:4px 0; border-radius:8px;';
+            }
+        } else if (isCurrent && !isActive) {
+            cls += ' active';
+            style = 'color:white; background:rgba(167,139,250,0.15); border-left:3px solid var(--purple);';
+        } else if (i < _lyricsActiveIndex) {
+            cls += ' past';
+        }
+
+        html += '<div class="' + cls + '" style="' + style + '" data-index="' + i + '">' + l.text + '</div>';
+    }
+    container.innerHTML = html;
+}
+
+// ── Update lirik berdasarkan waktu (HANYA SAAT ADA HOLD) ──
+function updateLyricsOnHold() {
+    var current = getCurrentPlayerTime();
+    if (_lyricsData.length === 0) return;
+
+    // ── CEK APAKAH ADA YANG HOLD ──
+    var hasActive = false;
+    for (var n in memberIntervals) {
+        if (memberIntervals[n]) { hasActive = true; break; }
+    }
+
+    if (!hasActive) return;
+
+    var newIndex = -1;
+    for (var i = 0; i < _lyricsData.length; i++) {
+        if (current >= _lyricsData[i].time) {
+            newIndex = i;
+        } else {
+            break;
+        }
+    }
+
+    if (newIndex !== _lyricsActiveIndex) {
+        _lyricsActiveIndex = newIndex;
+        renderLyrics();
+        scrollToActiveLyric();
+    }
+}
+
+// ── Scroll ke lirik aktif ──
+function scrollToActiveLyric() {
+    var container = document.getElementById('lyricsContainer');
+    if (!container) return;
+    var activeEl = container.querySelector('.lyric-line.active');
+    if (activeEl) {
+        var offset = activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
+        container.scrollTo({ top: offset, behavior: 'smooth' });
+    }
+}
+
+// ── Start sync ──
+function startLyricsSync() {
+    if (_lyricsUpdateInterval) clearInterval(_lyricsUpdateInterval);
+    _lyricsUpdateInterval = setInterval(updateLyricsOnHold, 200);
+}
+
+function stopLyricsSync() {
+    if (_lyricsUpdateInterval) {
+        clearInterval(_lyricsUpdateInterval);
+        _lyricsUpdateInterval = null;
+    }
+}
 
 // ── Parse LRC ──
 function parseLRC(content) {
@@ -2293,27 +2420,8 @@ function parseLRC(content) {
     parsed.sort(function(a, b) { return a.time - b.time; });
     _lyricsData = parsed;
     _lyricsActiveIndex = -1;
-    renderLyricsStatic();
-}
-
-// ── Render lirik (STATIS, tanpa sync) ──
-function renderLyricsStatic() {
-    var container = document.getElementById('lyricsContainer');
-    if (!container) return;
-
-    if (_lyricsData.length === 0) {
-        container.innerHTML = '<div style="text-align:center;color:var(--text3);padding:30px 0;font-size:12px;">No lyrics loaded.<br>Upload a .lrc file or click 🔍 Search to fetch from online.</div>';
-        return;
-    }
-
-    var html = '';
-    for (var i = 0; i < _lyricsData.length; i++) {
-        var l = _lyricsData[i];
-        var cls = 'lyric-line';
-        if (i === _lyricsActiveIndex) cls += ' active';
-        html += '<div class="' + cls + '" data-index="' + i + '">' + l.text + '</div>';
-    }
-    container.innerHTML = html;
+    renderLyrics();
+    startLyricsSync();
 }
 
 // ── Load LRC dari file ──
@@ -2332,8 +2440,9 @@ function loadLRCFile(input) {
 function clearLyrics() {
     _lyricsData = [];
     _lyricsActiveIndex = -1;
-    renderLyricsStatic();
+    renderLyrics();
     document.getElementById('lrcUpload').value = '';
+    stopLyricsSync();
     showToast('🗑 Lyrics cleared');
 }
 
@@ -2352,15 +2461,18 @@ async function searchLyrics() {
     if (result) {
         var lines = result.lyrics.split('\n');
         var parsed = [];
+        var time = 0;
         for (var i = 0; i < lines.length; i++) {
             var text = lines[i].trim();
             if (text) {
-                parsed.push({ time: 0, text: text });
+                parsed.push({ time: time, text: text });
+                time += 3;
             }
         }
         _lyricsData = parsed;
         _lyricsActiveIndex = -1;
-        renderLyricsStatic();
+        renderLyrics();
+        startLyricsSync();
         showToast('✅ Lyrics loaded from online!');
     } else {
         showToast('⚠️ Lyrics not found for this song');
