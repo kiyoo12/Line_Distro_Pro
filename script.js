@@ -339,6 +339,8 @@ function renderStripItem(n, c, p, index) {
             reorderLeaderboard();
         }, 50);
         saveStateForUndo();
+        // Update lirik saat hold mulai
+        updateLyricsOnHold();
     }
 
     function stopHold() {
@@ -363,6 +365,8 @@ function renderStripItem(n, c, p, index) {
         reorderLeaderboard();
         updatePresentationLive();
         saveStateForUndo();
+        // Update lirik saat hold berhenti
+        updateLyricsOnHold();
     }
 
     item.addEventListener('mousedown', startHold);
@@ -426,7 +430,7 @@ function applyRankStyles() {
 }
 
 // ══════════════════════════════════════════
-//  UPDATE LEADERBOARD — DENGAN DUET / GROUP
+//  UPDATE LEADERBOARD — TANPA LIRIK (STABLE)
 // ══════════════════════════════════════════
 function updateLeaderboardLive() {
     var all = document.querySelectorAll('.member-card');
@@ -1511,8 +1515,7 @@ function closeHistoryModal() { document.getElementById('historyModal').style.dis
 
 // ══════════════════════════════════════════
 //  8. KEYBOARD SHORTCUTS + AD-LIBS HOLD + PLAYER CONTROL
-// ══════════════════════════════════════════
-var activeKeyHolds = new Set();
+// ══════════════════════════════════════════var activeKeyHolds = new Set();
 
 document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -2297,7 +2300,7 @@ function reorderPresentationBars() {
 }
 
 // ══════════════════════════════════════════
-//  LYRICS — SYNC DENGAN HOLD MEMBER
+//  LYRICS — SYNC DENGAN HOLD MEMBER (TERPISAH DARI LEADERBOARD)
 // ══════════════════════════════════════════
 
 // ── Parse LRC ──
@@ -2330,7 +2333,7 @@ function parseLRC(content) {
     startLyricsSync();
 }
 
-// ── Render lirik dengan zoom + active member display ──
+// ── Render lirik (TANPA menyentuh leaderboard) ──
 function renderLyrics() {
     var container = document.getElementById('lyricsContainer');
     if (!container) return;
@@ -2364,9 +2367,9 @@ function renderLyrics() {
         activeDisplay.style.display = 'none';
     }
 
-    // ── RENDER LIRIK DENGAN ZOOM ──
+    // ── RENDER LIRIK ──
     if (_lyricsData.length === 0) {
-        container.innerHTML = '<div style="text-align:center;color:var(--text3);padding:30px 0;">No lyrics loaded.<br>Upload a .lrc file or click 🔍 Search.</div>';
+        container.innerHTML = '<div style="text-align:center;color:var(--text3);padding:30px 0;font-size:12px;">No lyrics loaded.<br>Upload a .lrc file or click 🔍 Search to fetch from online.</div>';
         return;
     }
 
@@ -2404,7 +2407,8 @@ function renderLyrics() {
 }
 
 // ── Update lirik berdasarkan waktu (HANYA SAAT ADA HOLD) ──
-function updateLyrics(currentTime) {
+function updateLyricsOnHold() {
+    var current = getCurrentPlayerTime();
     if (_lyricsData.length === 0) return;
 
     // ── CEK APAKAH ADA YANG HOLD ──
@@ -2418,7 +2422,7 @@ function updateLyrics(currentTime) {
 
     var newIndex = -1;
     for (var i = 0; i < _lyricsData.length; i++) {
-        if (currentTime >= _lyricsData[i].time) {
+        if (current >= _lyricsData[i].time) {
             newIndex = i;
         } else {
             break;
@@ -2443,22 +2447,10 @@ function scrollToActiveLyric() {
     }
 }
 
-// ── Start sync dengan player (HANYA SAAT ADA HOLD) ──
+// ── Start sync dengan player ──
 function startLyricsSync() {
     if (_lyricsUpdateInterval) clearInterval(_lyricsUpdateInterval);
-    _lyricsUpdateInterval = setInterval(function() {
-        // ── CEK APAKAH ADA YANG HOLD ──
-        var hasActive = false;
-        for (var n in memberIntervals) {
-            if (memberIntervals[n]) { hasActive = true; break; }
-        }
-
-        if (hasActive) {
-            var current = getCurrentPlayerTime();
-            updateLyrics(current);
-        }
-        // Kalau ga ada yang hold, lirik tetap di posisi terakhir (tidak bergulir)
-    }, 200);
+    _lyricsUpdateInterval = setInterval(updateLyricsOnHold, 200);
 }
 
 function stopLyricsSync() {
