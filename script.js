@@ -2367,3 +2367,64 @@ window.onload = function() {
         });
     }
 };
+
+// ══════════════════════════════════════════
+//  FETCH LIRIK DARI API (lyrics.ovh)
+// ══════════════════════════════════════════
+const LYRICS_API_URL = '/api/lyrics';
+
+async function fetchLyricsFromAPI(query) {
+    try {
+        const res = await fetch(LYRICS_API_URL + '?q=' + encodeURIComponent(query));
+        const data = await res.json();
+        
+        if (data.success && data.lyrics) {
+            return {
+                lyrics: data.lyrics,
+                title: data.title || 'Unknown',
+                artist: data.artist || 'Unknown'
+            };
+        }
+        return null;
+    } catch (e) {
+        console.error('❌ Error fetching lyrics:', e);
+        return null;
+    }
+}
+
+// ── TOMBOL SEARCH ──
+async function searchLyrics() {
+    const titleInput = document.getElementById('songTitle');
+    const query = titleInput.value.trim();
+    
+    if (!query) {
+        showToast('⚠️ Please enter a song title first');
+        return;
+    }
+
+    showToast('🔍 Searching lyrics...');
+
+    const result = await fetchLyricsFromAPI(query);
+    
+    if (result) {
+        const container = document.getElementById('lyricsContainer');
+        // Tampilkan lirik dengan format rapi
+        const lyricsHtml = result.lyrics
+            .split('\n')
+            .map(line => line.trim() ? `<div>${line}</div>` : '<br>')
+            .join('');
+        
+        container.innerHTML = `
+            <div style="color:var(--text);font-size:13px;line-height:1.8;padding:4px 0;">
+                <div style="color:var(--purple);font-weight:600;margin-bottom:8px;font-size:14px;">
+                    🎵 ${result.title} — ${result.artist}
+                </div>
+                ${lyricsHtml}
+            </div>
+        `;
+        
+        showToast('✅ Lyrics loaded successfully!');
+    } else {
+        showToast('⚠️ Lyrics not found for this song');
+    }
+}
