@@ -511,9 +511,7 @@ function updateLeaderboardLive() {
             }
         }
     }
-
-    // ── Update lirik highlight saat hold berubah ──
-    renderLyrics();
+    // TIDAK ADA renderLyrics() DI SINI!
 }
 
 function reorderLeaderboard() {
