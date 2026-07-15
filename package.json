@@ -2,6 +2,7 @@
   "name": "linedistro-v2",
   "version": "1.0.0",
   "dependencies": {
-    "axios": "^1.6.0"
+    "axios": "^1.6.0",
+    "genius-lyrics-api": "^3.0.2"
   }
 }
