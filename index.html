@@ -86,7 +86,7 @@
                 <span id="durationDisplay">0:00</span>
             </div>
 
-            <!-- ── LYRICS ── -->
+            <!-- ── LYRICS (STATIS) ── -->
             <div style="margin-top:12px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
                     <span style="color:var(--text2);font-size:12px;font-weight:600;">📝 LYRICS</span>
@@ -98,12 +98,6 @@
                         </label>
                         <button class="btn-ghost" style="height:28px;padding:0 12px;font-size:11px;" onclick="clearLyrics()">✕ Clear</button>
                     </div>
-                </div>
-                <!-- ── ACTIVE MEMBER DISPLAY ── -->
-                <div id="activeMemberDisplay" style="display:none; align-items:center; gap:10px; padding:6px 12px; background:var(--bg3); border-radius:8px; margin-bottom:8px; border-left:4px solid var(--purple); transition: all 0.3s ease;">
-                    <img id="activeMemberAvatar" src="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--purple);">
-                    <span id="activeMemberName" style="font-weight:600; font-size:14px; color:var(--text);"></span>
-                    <span id="activeMemberLyrics" style="font-size:13px; color:var(--text2); flex:1; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
                 </div>
                 <div id="lyricsContainer" style="height:150px;overflow-y:auto;background:var(--bg3);border-radius:8px;padding:10px 14px;border:1px solid var(--border);font-size:13px;line-height:1.8;color:var(--text2);scroll-behavior:smooth;">
                     <div style="text-align:center;color:var(--text3);padding:30px 0;font-size:12px;">
