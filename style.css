@@ -714,6 +714,31 @@ button, .file-btn {
     to   { transform: translateY(0);    opacity: 1; }
 }
 
+/* ══════════════════════════════════════════
+   MODAL CLOSE BUTTON (X)
+   ══════════════════════════════════════════ */
+.modal-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: transparent;
+    border: none;
+    color: var(--text2);
+    font-size: 20px;
+    font-weight: 400;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 6px;
+    z-index: 10;
+    border-radius: 4px;
+    transition: color 0.2s, background 0.2s, transform 0.2s;
+}
+.modal-close:hover {
+    color: var(--danger);
+    background: rgba(248,113,113,0.1);
+    transform: scale(1.1);
+}
+
 .modal-wide { max-width: 560px; }
 
 .modal-icon {
