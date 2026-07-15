@@ -2333,11 +2333,17 @@ function renderLyrics() {
     var activeName = document.getElementById('activeMemberName');
     var activeLyrics = document.getElementById('activeMemberLyrics');
 
-    // ── UPDATE ACTIVE MEMBER DISPLAY ──
-    if (activeMembers.length > 0 && _lyricsActiveIndex >= 0 && _lyricsActiveIndex < _lyricsData.length) {
+    // ── UPDATE ACTIVE MEMBER DISPLAY (REAL-TIME) ──
+    if (activeMembers.length > 0) {
+        // Ambil member pertama yang hold
         var firstMember = activeMembers[0];
         var color = memberColors[firstMember] || '#a78bfa';
-        var currentLyric = _lyricsData[_lyricsActiveIndex]?.text || '';
+        
+        // Ambil lirik yang sedang aktif (jika ada)
+        var currentLyric = '';
+        if (_lyricsActiveIndex >= 0 && _lyricsActiveIndex < _lyricsData.length) {
+            currentLyric = _lyricsData[_lyricsActiveIndex]?.text || '';
+        }
 
         activeDisplay.style.display = 'flex';
         activeDisplay.style.borderLeftColor = color;
