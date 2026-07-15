@@ -2430,14 +2430,18 @@ function scrollToActiveLyric() {
     if (!container) return;
     var activeEl = container.querySelector('.lyric-line.active');
     if (activeEl) {
-        // Cek apakah baris aktif terlihat
+        // Cek apakah baris aktif terlihat sepenuhnya
         var containerRect = container.getBoundingClientRect();
         var activeRect = activeEl.getBoundingClientRect();
         var isVisible = (activeRect.top >= containerRect.top && activeRect.bottom <= containerRect.bottom);
 
         if (!isVisible) {
-            var offset = activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
-            container.scrollTo({ top: offset, behavior: 'smooth' });
+            // Scroll ke posisi alami (baris aktif di bagian atas container)
+            // Bukan dipaksa ke tengah
+            activeEl.scrollIntoView({
+                block: 'nearest',  // 'nearest' = scroll seminimal mungkin
+                behavior: 'smooth'
+            });
         }
     }
 }
