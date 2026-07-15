@@ -1206,3 +1206,20 @@ button, .file-btn {
     color: var(--danger);
     transform: scale(1.15);
 }
+
+/* Lyrics */
+#lyricsContainer {
+    scroll-behavior: smooth;
+    transition: background 0.2s;
+}
+#lyricsContainer::-webkit-scrollbar {
+    width: 4px;
+}
+#lyricsContainer::-webkit-scrollbar-thumb {
+    background: var(--border2);
+    border-radius: 2px;
+}
+#lyricsContainer div {
+    transition: all 0.15s ease;
+    padding: 1px 0;
+}
