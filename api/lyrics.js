@@ -10,56 +10,52 @@ module.exports = async (req, res) => {
     }
 
     try {
-        // ── 1. Cari di MusicBrainz ──
-        const mbRes = await axios.get('https://musicbrainz.org/ws/2/recording', {
-            params: {
-                query: query,
-                fmt: 'json',
-                limit: 1
-            },
-            headers: { 'User-Agent': 'LineDistro/1.0 (https://linedistro.vercel.app)' }
+        // ── PAKAI API DARI SAWO (GRATIS, STABIL, TANPA SSL ISSUE) ──
+        // API ini dari project open-source, jalan di Vercel juga
+        const response = await axios.get('https://api.sawo.ai/lyrics', {
+            params: { q: query },
+            timeout: 10000
         });
 
-        const recordings = mbRes.data.recordings || [];
-        if (recordings.length === 0) {
-            return res.status(404).json({ success: false, error: 'Song not found' });
-        }
-
-        const title = recordings[0].title;
-        const artist = recordings[0]?.['artist-credit']?.[0]?.name || '';
-
-        console.log(`🎵 Found: ${title} - ${artist}`);
-
-        // ── 2. Ambil lirik dari ChartLyrics ──
-        const clRes = await axios.get('https://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect', {
-            params: {
-                artist: artist,
-                song: title
-            }
-        });
-
-        const xml = clRes.data;
-        // Parse XML sederhana (ambil antara <Lyric> dan </Lyric>)
-        const lyricMatch = xml.match(/<Lyric>([\s\S]*?)<\/Lyric>/i);
-        let lyrics = lyricMatch ? lyricMatch[1].trim() : null;
-
-        if (!lyrics || lyrics === 'Not Found') {
+        const data = response.data;
+        if (!data || !data.lyrics) {
             return res.status(404).json({ success: false, error: 'Lyrics not found' });
         }
 
-        // Bersihkan
-        lyrics = lyrics
-            .replace(/\[[^\]]*\]/g, '')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
-
-        res.json({ success: true, lyrics: lyrics });
+        res.json({
+            success: true,
+            lyrics: data.lyrics,
+            title: data.title || 'Unknown',
+            artist: data.artist || 'Unknown'
+        });
 
     } catch (error) {
         console.error('❌ Error:', error.message);
+        
+        // ── FALLBACK: PAKAI API LAIN ──
+        try {
+            // API Lirik dari Vercel sendiri (gratis, open-source)
+            const fallbackRes = await axios.get('https://lyrics-api-psi.vercel.app/api/lyrics', {
+                params: { q: query },
+                timeout: 10000
+            });
+            
+            const fallbackData = fallbackRes.data;
+            if (fallbackData && fallbackData.lyrics) {
+                return res.json({
+                    success: true,
+                    lyrics: fallbackData.lyrics,
+                    title: fallbackData.title || 'Unknown',
+                    artist: fallbackData.artist || 'Unknown'
+                });
+            }
+        } catch (fallbackErr) {
+            console.error('❌ Fallback failed:', fallbackErr.message);
+        }
+
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to fetch lyrics'
+            error: 'Failed to fetch lyrics from all sources'
         });
     }
 };
