@@ -1240,3 +1240,32 @@ button, .file-btn {
 #activeMemberDisplay.all-mode #activeMemberName {
     color: #fbbf24 !important;
 }
+
+/* ── ALL BADGE ── */
+.all-badge {
+    color: #fbbf24;
+    font-weight: 700;
+    font-size: 11px;
+    background: rgba(251, 191, 36, 0.15);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+}
+
+/* ── HIGHLIGHT LIRIK PAKAI CSS ── */
+.lyric-line.active {
+    opacity: 1;
+    font-weight: 500;
+    background: rgba(167, 139, 250, 0.15);
+    border-left: 3px solid var(--purple);
+    padding-left: 12px;
+}
+
+/* ── PASTIKAN TIDAK ADA TRANSISI BERLEBIH ── */
+.lyric-line {
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: default;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
