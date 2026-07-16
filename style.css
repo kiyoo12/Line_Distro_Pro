@@ -1232,3 +1232,11 @@ button, .file-btn {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
+
+#activeMemberDisplay.all-mode {
+    border-left-color: #fbbf24 !important;
+    background: rgba(251, 191, 36, 0.1) !important;
+}
+#activeMemberDisplay.all-mode #activeMemberName {
+    color: #fbbf24 !important;
+}
