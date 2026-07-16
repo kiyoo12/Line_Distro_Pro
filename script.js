@@ -91,6 +91,8 @@ function showFileName(input, labelId, defaultText) {
 // ══════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════
+// Di bagian STATE (awal file)
+var _lastRenderState = ''; // tambahkan ini
 var memberList = document.getElementById('memberList');
 var memberDurations = {};
 var memberColors = {};
@@ -2375,8 +2377,20 @@ function renderLyrics() {
     var activeColors = activeMembers.map(function(n) { return memberColors[n] || '#a78bfa'; });
     var isDuet = activeMembers.length >= 2;
     var avgColor = isDuet ? getAverageColor(activeColors) : (activeColors[0] || '#ffffff');
-    // Mode ALL tetap aktif untuk highlight & zoom
     var isActive = activeMembers.length > 0 || _isAllMembersActive;
+
+    // ── CEK APAKAH STATE BERUBAH ──
+    var currentState = JSON.stringify({
+        activeIndex: _lyricsActiveIndex,
+        isAll: _isAllMembersActive,
+        activeMembers: activeMembers.slice().sort()
+    });
+
+    if (currentState === _lastRenderState && container._lastHtml === container.innerHTML) {
+        // Tidak ada perubahan, skip render
+        return;
+    }
+    _lastRenderState = currentState;
 
     var html = '';
     for (var i = 0; i < _lyricsData.length; i++) {
@@ -2387,13 +2401,11 @@ function renderLyrics() {
 
         if (isCurrent && isActive) {
             cls += ' active';
-            // Zoom lebih kecil biar ga kepotong (1.1x)
             var scale = isDuet ? 'scale(1.08)' : 'scale(1.1)';
             var shadow = isDuet ? '0 0 20px ' + avgColor + '55' : '0 0 20px ' + activeColors[0] + '55';
             var bgColor = isDuet ? avgColor + '33' : activeColors[0] + '33';
             var borderColor = isDuet ? avgColor : activeColors[0];
             
-            // Tampilkan "ALL" di samping lirik jika mode ALL aktif
             var allLabel = _isAllMembersActive ? ' <span style="color:#fbbf24;font-weight:700;font-size:11px;background:rgba(251,191,36,0.15);padding:2px 8px;border-radius:4px;margin-left:8px;">ALL</span>' : '';
             
             style = 'color:white; background:' + bgColor + '; border-left:3px solid ' + borderColor + '; transform:' + scale + '; box-shadow:' + shadow + '; padding:8px 14px; margin:6px 0; border-radius:8px; display:flex; align-items:center; gap:8px;';
@@ -2410,6 +2422,7 @@ function renderLyrics() {
         }
     }
     container.innerHTML = html;
+    container._lastHtml = html;
 }
 
 function updateLyricsOnHold() {
@@ -2421,7 +2434,6 @@ function updateLyricsOnHold() {
         if (memberIntervals[n]) { hasActive = true; break; }
     }
 
-    // ── JIKA TIDAK ADA HOLD DAN BUKAN MODE ALL, SKIP ──
     if (!hasActive && !_isAllMembersActive) return;
 
     var newIndex = -1;
