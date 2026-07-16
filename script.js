@@ -2368,41 +2368,28 @@ function renderLyrics() {
         activeDisplay.style.display = 'none';
     }
 
-    // ── RENDER LIRIK (VERSI SIMPLIFIED, NO ZOOM) ──
+    // ── RENDER LIRIK (HANYA TEKS, TANPA EFEK) ──
     if (_lyricsData.length === 0) {
         container.innerHTML = '<div style="text-align:center;color:var(--text3);padding:30px 0;font-size:12px;">No lyrics loaded.<br>Upload a .lrc file or click 🔍 Search to fetch from online.</div>';
         return;
     }
 
-    var activeColors = activeMembers.map(function(n) { return memberColors[n] || '#a78bfa'; });
-    var isDuet = activeMembers.length >= 2;
-    var avgColor = isDuet ? getAverageColor(activeColors) : (activeColors[0] || '#ffffff');
-    var isActive = activeMembers.length > 0 || _isAllMembersActive;
-
     var html = '';
     for (var i = 0; i < _lyricsData.length; i++) {
         var l = _lyricsData[i];
         var isCurrent = (i === _lyricsActiveIndex);
+        // ── PAKAI CSS CLASS ──
         var cls = 'lyric-line';
-        var style = '';
-
-        if (isCurrent && isActive) {
-            cls += ' active';
-            // ── PAKAI CSS CLASS, BUKAN INLINE STYLE ──
-            // Biar CSS yang ngatur highlight & ALL label
-            var allLabel = _isAllMembersActive ? ' <span class="all-badge">ALL</span>' : '';
-            style = 'padding:6px 12px; margin:4px 0; border-radius:4px;';
-            html += '<div class="' + cls + '" style="' + style + '" data-index="' + i + '">' + l.text + allLabel + '</div>';
-        } else if (isCurrent && !isActive) {
-            cls += ' active';
-            style = 'padding:4px 10px;';
-            html += '<div class="' + cls + '" style="' + style + '" data-index="' + i + '">' + l.text + '</div>';
-        } else if (i < _lyricsActiveIndex) {
-            cls += ' past';
-            html += '<div class="' + cls + '" data-index="' + i + '">' + l.text + '</div>';
-        } else {
-            html += '<div class="' + cls + '" data-index="' + i + '">' + l.text + '</div>';
+        if (isCurrent) cls += ' active';
+        if (i < _lyricsActiveIndex) cls += ' past';
+        
+        // ── ALL BADGE ──
+        var allLabel = '';
+        if (isCurrent && _isAllMembersActive) {
+            allLabel = ' <span class="all-badge">ALL</span>';
         }
+        
+        html += '<div class="' + cls + '" data-index="' + i + '">' + l.text + allLabel + '</div>';
     }
     container.innerHTML = html;
 }
