@@ -2331,7 +2331,6 @@ function renderLyrics() {
 
     // ── UPDATE ACTIVE MEMBER DISPLAY ──
     if (_isAllMembersActive) {
-        // Mode ALL (semua member bernyanyi bersama) — TANPA nambah durasi
         activeDisplay.style.display = 'flex';
         activeDisplay.style.borderLeftColor = '#fbbf24';
         activeAvatar.style.display = 'none';
@@ -2342,7 +2341,6 @@ function renderLyrics() {
         activeLyrics.style.fontWeight = 'bold';
         activeLyrics.style.fontStyle = 'italic';
     } else if (activeMembers.length > 0 && _lyricsActiveIndex >= 0 && _lyricsActiveIndex < _lyricsData.length) {
-        // Mode individual (seperti biasa)
         activeAvatar.style.display = 'block';
         var firstMember = activeMembers[0];
         var color = memberColors[firstMember] || '#a78bfa';
@@ -2377,7 +2375,8 @@ function renderLyrics() {
     var activeColors = activeMembers.map(function(n) { return memberColors[n] || '#a78bfa'; });
     var isDuet = activeMembers.length >= 2;
     var avgColor = isDuet ? getAverageColor(activeColors) : (activeColors[0] || '#ffffff');
-    var isActive = activeMembers.length > 0 && !_isAllMembersActive;
+    // Mode ALL tetap aktif untuk highlight & zoom
+    var isActive = activeMembers.length > 0 || _isAllMembersActive;
 
     var html = '';
     for (var i = 0; i < _lyricsData.length; i++) {
@@ -2388,21 +2387,27 @@ function renderLyrics() {
 
         if (isCurrent && isActive) {
             cls += ' active';
-            var scale = isDuet ? 'scale(1.15)' : 'scale(1.2)';
+            // Zoom lebih kecil biar ga kepotong (1.1x)
+            var scale = isDuet ? 'scale(1.08)' : 'scale(1.1)';
             var shadow = isDuet ? '0 0 20px ' + avgColor + '55' : '0 0 20px ' + activeColors[0] + '55';
-            if (isDuet) {
-                style = 'color:white; background:' + avgColor + '33; border-left:3px solid ' + avgColor + '; transform:' + scale + '; box-shadow:' + shadow + '; padding:6px 12px; margin:4px 0; border-radius:8px;';
-            } else {
-                style = 'color:white; background:' + activeColors[0] + '33; border-left:3px solid ' + activeColors[0] + '; transform:' + scale + '; box-shadow:' + shadow + '; padding:6px 12px; margin:4px 0; border-radius:8px;';
-            }
+            var bgColor = isDuet ? avgColor + '33' : activeColors[0] + '33';
+            var borderColor = isDuet ? avgColor : activeColors[0];
+            
+            // Tampilkan "ALL" di samping lirik jika mode ALL aktif
+            var allLabel = _isAllMembersActive ? ' <span style="color:#fbbf24;font-weight:700;font-size:11px;background:rgba(251,191,36,0.15);padding:2px 8px;border-radius:4px;margin-left:8px;">ALL</span>' : '';
+            
+            style = 'color:white; background:' + bgColor + '; border-left:3px solid ' + borderColor + '; transform:' + scale + '; box-shadow:' + shadow + '; padding:8px 14px; margin:6px 0; border-radius:8px; display:flex; align-items:center; gap:8px;';
+            html += '<div class="' + cls + '" style="' + style + '" data-index="' + i + '">' + l.text + allLabel + '</div>';
         } else if (isCurrent && !isActive) {
             cls += ' active';
-            style = 'color:white; background:rgba(167,139,250,0.15); border-left:3px solid var(--purple);';
+            style = 'color:white; background:rgba(167,139,250,0.15); border-left:3px solid var(--purple); padding:4px 10px;';
+            html += '<div class="' + cls + '" style="' + style + '" data-index="' + i + '">' + l.text + '</div>';
         } else if (i < _lyricsActiveIndex) {
             cls += ' past';
+            html += '<div class="' + cls + '" data-index="' + i + '">' + l.text + '</div>';
+        } else {
+            html += '<div class="' + cls + '" data-index="' + i + '">' + l.text + '</div>';
         }
-
-        html += '<div class="' + cls + '" style="' + style + '" data-index="' + i + '">' + l.text + '</div>';
     }
     container.innerHTML = html;
 }
@@ -2416,6 +2421,7 @@ function updateLyricsOnHold() {
         if (memberIntervals[n]) { hasActive = true; break; }
     }
 
+    // ── JIKA TIDAK ADA HOLD DAN BUKAN MODE ALL, SKIP ──
     if (!hasActive && !_isAllMembersActive) return;
 
     var newIndex = -1;
