@@ -110,6 +110,9 @@ var _pressReorderPending = false;
 var _timelineInterval = null;
 var _currentVolume = 0.8;
 
+// ── TAB MODE ──
+var _isAllMembersActive = false; // untuk toggle ALL di LYRICS
+
 // ── AD-LIBS HOLD ──
 var activeAdLibKeys = new Set();
 var adLibIntervals = {};
@@ -426,7 +429,7 @@ function applyRankStyles() {
 }
 
 // ══════════════════════════════════════════
-//  UPDATE LEADERBOARD — TANPA LIRIK (STABLE)
+//  UPDATE LEADERBOARD
 // ══════════════════════════════════════════
 function updateLeaderboardLive() {
     var all = document.querySelectorAll('.member-card');
@@ -511,7 +514,6 @@ function updateLeaderboardLive() {
             }
         }
     }
-    // TIDAK ADA renderLyrics() DI SINI!
 }
 
 function reorderLeaderboard() {
@@ -663,7 +665,7 @@ function deleteMember(n) {
 }
 
 // ══════════════════════════════════════════
-//  RESET ALL (FULL RESET)
+//  RESET ALL
 // ══════════════════════════════════════════
 function confirmResetAll() {
     var names = Object.keys(memberDurations);
@@ -682,8 +684,6 @@ function confirmResetAll() {
 
 function resetAllData() {
     var names = Object.keys(memberDurations);
-
-    // ── 1. RESET DURASI MEMBER ──
     for (var i = 0; i < names.length; i++) {
         var n = names[i];
         if (memberIntervals[n]) {
@@ -692,20 +692,13 @@ function resetAllData() {
         }
         memberDurations[n] = 0;
     }
-
-    // ── 2. RESET TIMELINE ──
     timelineData = [];
-
-    // ── 3. RESET PLAYER (ke 0:00) ──
     resetPlayerToStart();
-
-    // ── 4. UPDATE UI ──
     reloadMemberStrip();
     reloadMemberList();
     updateTotalDuration();
     updateLeaderboardLive();
     saveStateForUndo();
-
     showToast('↺ All data reset successfully');
 }
 
@@ -730,7 +723,6 @@ function resetPlayerToStart() {
             console.log('⚠️ YouTube seek failed:', e);
         }
     }
-
     updateMediaProgress();
 }
 
@@ -1061,7 +1053,7 @@ function getCurrentPlayerTime() {
     return 0;
 }
 
-// ── VOLUME CONTROL ──
+// ── VOLUME ──
 function applyVolumeToMedia(el) {
     if (el) el.volume = _currentVolume;
 }
@@ -1132,7 +1124,7 @@ function formatTime(seconds) {
 }
 
 // ══════════════════════════════════════════
-//  PLAYER CONTROL (Space, ArrowLeft, ArrowRight)
+//  PLAYER CONTROL
 // ══════════════════════════════════════════
 function togglePlayerPlayback() {
     var vid = document.getElementById('localMedia');
@@ -1184,7 +1176,7 @@ function seekPlayer(seconds) {
 }
 
 // ══════════════════════════════════════════
-//  FAIRNESS (Gini Coefficient) — ENGLISH
+//  FAIRNESS (Gini Coefficient)
 // ══════════════════════════════════════════
 function calculateFairness(durations) {
     var values = [];
@@ -1209,7 +1201,7 @@ function calculateFairness(durations) {
 }
 
 // ══════════════════════════════════════════
-//  6. FINISH + RESET + TIMELINE + CHART + FAIRNESS (ENGLISH)
+//  6. FINISH + RESET + TIMELINE + CHART + FAIRNESS
 // ══════════════════════════════════════════
 function finish() {
     var names = Object.keys(memberDurations);
@@ -1244,7 +1236,6 @@ function finish() {
         lb.appendChild(item);
     }
 
-    // ── FAIRNESS (ENGLISH) ──
     var fairness = calculateFairness(memberDurations);
     var fairnessHtml = '<div style="margin-top:14px;padding:12px 16px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;">';
     fairnessHtml += '<span style="color:var(--text2);font-size:13px;">⚖️ Line Distribution Fairness</span>';
@@ -1287,7 +1278,6 @@ function finish() {
     saveToHistory(title, sorted, memberDurations, memberColors, memberPhotos, total);
     document.getElementById('resultModal').style.display = 'flex';
 
-    // ── TIMELINE ──
     setTimeout(function() {
         var modalBox = document.querySelector('#resultModal .modal-box');
         var existing = document.getElementById('timelineContainer');
@@ -1322,7 +1312,6 @@ function finish() {
         }, 500);
     }, 300);
 
-    // ── RESET ALL TIMESTAMPS AFTER FINISH ──
     resetAllTimestamps();
 }
 
@@ -1411,7 +1400,7 @@ function closeResultModal() {
 }
 
 // ══════════════════════════════════════════
-//  7. HISTORY — delete button always visible
+//  7. HISTORY
 // ══════════════════════════════════════════
 function getHistory() {
     try {
@@ -1564,14 +1553,23 @@ function confirmClearHistory() {
 function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
 
 // ══════════════════════════════════════════
-//  8. KEYBOARD SHORTCUTS + AD-LIBS HOLD + PLAYER CONTROL
+//  8. KEYBOARD SHORTCUTS + AD-LIBS HOLD + PLAYER CONTROL + TAB
 // ══════════════════════════════════════════
 var activeKeyHolds = new Set();
 
 document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    // ── PLAYER CONTROL (Space, ArrowLeft, ArrowRight) ──
+    // ── TAB = TOGGLE "ALL" DI LYRICS (tanpa nambah durasi) ──
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        _isAllMembersActive = !_isAllMembersActive;
+        renderLyrics();
+        showToast(_isAllMembersActive ? '🎤 ALL members singing together' : '↺ ALL released');
+        return;
+    }
+
+    // ── PLAYER CONTROL ──
     if (e.key === ' ' || e.key === 'Space' || e.key === 'Spacebar') {
         e.preventDefault();
         togglePlayerPlayback();
@@ -1646,8 +1644,8 @@ document.addEventListener('keydown', function(e) {
 document.addEventListener('keyup', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    // Abaikan jika tombol player
-    if (e.key === ' ' || e.key === 'Space' || e.key === 'Spacebar' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    // Abaikan tombol player & Tab
+    if (e.key === ' ' || e.key === 'Space' || e.key === 'Spacebar' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Tab') {
         return;
     }
 
@@ -2243,7 +2241,6 @@ function updatePresentationLive() {
         }
     }
 
-    // ── REORDER PRESENTASI (LANGSUNG, SEPERTI MODE NORMAL) ──
     reorderPresentationBars();
 }
 
@@ -2319,10 +2316,9 @@ function reorderPresentationBars() {
 }
 
 // ══════════════════════════════════════════
-//  LYRICS — SYNC DENGAN HOLD MEMBER (HANYA DI AREA LYRICS)
+//  LYRICS — SYNC DENGAN HOLD MEMBER + TAB "ALL"
 // ══════════════════════════════════════════
 
-// ── Render lirik ──
 function renderLyrics() {
     var container = document.getElementById('lyricsContainer');
     if (!container) return;
@@ -2333,17 +2329,24 @@ function renderLyrics() {
     var activeName = document.getElementById('activeMemberName');
     var activeLyrics = document.getElementById('activeMemberLyrics');
 
-    // ── UPDATE ACTIVE MEMBER DISPLAY (REAL-TIME) ──
-    if (activeMembers.length > 0) {
-        // Ambil member pertama yang hold
+    // ── UPDATE ACTIVE MEMBER DISPLAY ──
+    if (_isAllMembersActive) {
+        // Mode ALL (semua member bernyanyi bersama) — TANPA nambah durasi
+        activeDisplay.style.display = 'flex';
+        activeDisplay.style.borderLeftColor = '#fbbf24';
+        activeAvatar.style.display = 'none';
+        activeName.textContent = '🎤 ALL';
+        activeName.style.color = '#fbbf24';
+        activeLyrics.textContent = 'All members singing together';
+        activeLyrics.style.color = '#fbbf24';
+        activeLyrics.style.fontWeight = 'bold';
+        activeLyrics.style.fontStyle = 'italic';
+    } else if (activeMembers.length > 0 && _lyricsActiveIndex >= 0 && _lyricsActiveIndex < _lyricsData.length) {
+        // Mode individual (seperti biasa)
+        activeAvatar.style.display = 'block';
         var firstMember = activeMembers[0];
         var color = memberColors[firstMember] || '#a78bfa';
-        
-        // Ambil lirik yang sedang aktif (jika ada)
-        var currentLyric = '';
-        if (_lyricsActiveIndex >= 0 && _lyricsActiveIndex < _lyricsData.length) {
-            currentLyric = _lyricsData[_lyricsActiveIndex]?.text || '';
-        }
+        var currentLyric = _lyricsData[_lyricsActiveIndex]?.text || '';
 
         activeDisplay.style.display = 'flex';
         activeDisplay.style.borderLeftColor = color;
@@ -2352,6 +2355,9 @@ function renderLyrics() {
         activeName.textContent = firstMember;
         activeName.style.color = color;
         activeLyrics.textContent = currentLyric;
+        activeLyrics.style.color = 'var(--text2)';
+        activeLyrics.style.fontWeight = 'normal';
+        activeLyrics.style.fontStyle = 'normal';
 
         if (activeMembers.length >= 2) {
             activeName.textContent = activeMembers.join(' + ');
@@ -2371,7 +2377,7 @@ function renderLyrics() {
     var activeColors = activeMembers.map(function(n) { return memberColors[n] || '#a78bfa'; });
     var isDuet = activeMembers.length >= 2;
     var avgColor = isDuet ? getAverageColor(activeColors) : (activeColors[0] || '#ffffff');
-    var isActive = activeMembers.length > 0;
+    var isActive = activeMembers.length > 0 && !_isAllMembersActive;
 
     var html = '';
     for (var i = 0; i < _lyricsData.length; i++) {
@@ -2401,18 +2407,16 @@ function renderLyrics() {
     container.innerHTML = html;
 }
 
-// ── Update lirik berdasarkan waktu (HANYA SAAT ADA HOLD) ──
 function updateLyricsOnHold() {
     var current = getCurrentPlayerTime();
     if (_lyricsData.length === 0) return;
 
-    // ── CEK APAKAH ADA YANG HOLD ──
     var hasActive = false;
     for (var n in memberIntervals) {
         if (memberIntervals[n]) { hasActive = true; break; }
     }
 
-    if (!hasActive) return;
+    if (!hasActive && !_isAllMembersActive) return;
 
     var newIndex = -1;
     for (var i = 0; i < _lyricsData.length; i++) {
@@ -2430,29 +2434,24 @@ function updateLyricsOnHold() {
     }
 }
 
-// ── Scroll ke lirik aktif (HANYA JIKA TIDAK TERLIHAT) ──
 function scrollToActiveLyric() {
     var container = document.getElementById('lyricsContainer');
     if (!container) return;
     var activeEl = container.querySelector('.lyric-line.active');
     if (activeEl) {
-        // Cek apakah baris aktif terlihat sepenuhnya
         var containerRect = container.getBoundingClientRect();
         var activeRect = activeEl.getBoundingClientRect();
         var isVisible = (activeRect.top >= containerRect.top && activeRect.bottom <= containerRect.bottom);
 
         if (!isVisible) {
-            // Scroll ke posisi alami (baris aktif di bagian atas container)
-            // Bukan dipaksa ke tengah
             activeEl.scrollIntoView({
-                block: 'nearest',  // 'nearest' = scroll seminimal mungkin
+                block: 'nearest',
                 behavior: 'smooth'
             });
         }
     }
 }
 
-// ── Start sync ──
 function startLyricsSync() {
     if (_lyricsUpdateInterval) clearInterval(_lyricsUpdateInterval);
     _lyricsUpdateInterval = setInterval(updateLyricsOnHold, 200);
@@ -2465,7 +2464,6 @@ function stopLyricsSync() {
     }
 }
 
-// ── Parse LRC ──
 function parseLRC(content) {
     var lines = content.split('\n');
     var parsed = [];
@@ -2495,7 +2493,6 @@ function parseLRC(content) {
     startLyricsSync();
 }
 
-// ── Load LRC dari file ──
 function loadLRCFile(input) {
     var file = input.files[0];
     if (!file) return;
@@ -2507,17 +2504,16 @@ function loadLRCFile(input) {
     reader.readAsText(file);
 }
 
-// ── Clear lyrics ──
 function clearLyrics() {
     _lyricsData = [];
     _lyricsActiveIndex = -1;
+    _isAllMembersActive = false;
     renderLyrics();
     document.getElementById('lrcUpload').value = '';
     stopLyricsSync();
     showToast('🗑 Lyrics cleared');
 }
 
-// ── Search lyrics online ──
 async function searchLyrics() {
     var titleInput = document.getElementById('songTitle');
     var query = titleInput.value.trim();
@@ -2542,6 +2538,7 @@ async function searchLyrics() {
         }
         _lyricsData = parsed;
         _lyricsActiveIndex = -1;
+        _isAllMembersActive = false;
         renderLyrics();
         startLyricsSync();
         showToast('✅ Lyrics loaded from online!');
@@ -2550,7 +2547,6 @@ async function searchLyrics() {
     }
 }
 
-// ── API call ke backend ──
 const LYRICS_API_URL = '/api/lyrics';
 
 async function fetchLyricsFromAPI(query) {
@@ -2571,6 +2567,32 @@ async function fetchLyricsFromAPI(query) {
         return null;
     }
 }
+
+// ── MANUAL SYNC: KLIK LIRIK UNTUK SET TIMESTAMP ──
+document.addEventListener('DOMContentLoaded', function() {
+    var container = document.getElementById('lyricsContainer');
+    if (!container) return;
+
+    container.addEventListener('click', function(e) {
+        var line = e.target.closest('.lyric-line');
+        if (!line) return;
+        var index = parseInt(line.dataset.index);
+        if (isNaN(index)) return;
+
+        var currentTime = getCurrentPlayerTime();
+        if (!currentTime || currentTime === 0) {
+            showToast('⚠️ Putar lagu dulu sebelum set timestamp');
+            return;
+        }
+
+        _lyricsData[index].time = currentTime;
+        _lyricsData.sort(function(a, b) { return a.time - b.time; });
+
+        _lyricsActiveIndex = -1;
+        renderLyrics();
+        showToast('✅ Timestamp set untuk baris ke-' + (index + 1));
+    });
+});
 
 // ══════════════════════════════════════════
 //  10. INIT
