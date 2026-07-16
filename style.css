@@ -1182,63 +1182,27 @@ button, .file-btn {
     .press-time { font-size: 12px; }
 }
 
-/* ── LYRICS STATIS ── */
+/* ══════════════════════════════════════════
+   LYRICS
+   ══════════════════════════════════════════ */
 .lyric-line {
     padding: 4px 8px;
     border-radius: 4px;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     cursor: default;
-    opacity: 0.6;
+    opacity: 0.5;
+    color: var(--text2);
 }
 .lyric-line.active {
     opacity: 1;
     font-weight: 500;
-    background: rgba(167,139,250,0.15);
+    background: rgba(167, 139, 250, 0.15);
     border-left: 3px solid var(--purple);
     padding-left: 12px;
+    color: var(--text);
 }
 .lyric-line.past {
-    opacity: 0.3;
-}
-#lyricsContainer::-webkit-scrollbar {
-    width: 4px;
-}
-#lyricsContainer::-webkit-scrollbar-thumb {
-    background: var(--border2);
-    border-radius: 2px;
-}
-
-.strip-tooltip {
-    position: absolute;
-    bottom: calc(100% + 10px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    color: var(--text2);
-    font-size: 11px;
-    font-weight: 500;
-    padding: 5px 10px;
-    border-radius: 6px;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.18s, transform 0.18s;
-    transform: translateX(-50%) translateY(4px);
-    z-index: 10;
-}
-
-.strip-item:hover .strip-tooltip {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-}
-
-#activeMemberDisplay.all-mode {
-    border-left-color: #fbbf24 !important;
-    background: rgba(251, 191, 36, 0.1) !important;
-}
-#activeMemberDisplay.all-mode #activeMemberName {
-    color: #fbbf24 !important;
+    opacity: 0.25;
 }
 
 /* ── ALL BADGE ── */
@@ -1252,20 +1216,19 @@ button, .file-btn {
     margin-left: 8px;
 }
 
-/* ── HIGHLIGHT LIRIK PAKAI CSS ── */
-.lyric-line.active {
-    opacity: 1;
-    font-weight: 500;
-    background: rgba(167, 139, 250, 0.15);
-    border-left: 3px solid var(--purple);
-    padding-left: 12px;
+#lyricsContainer::-webkit-scrollbar {
+    width: 4px;
+}
+#lyricsContainer::-webkit-scrollbar-thumb {
+    background: var(--border2);
+    border-radius: 2px;
 }
 
-/* ── PASTIKAN TIDAK ADA TRANSISI BERLEBIH ── */
-.lyric-line {
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: default;
-    opacity: 0.6;
-    transition: opacity 0.2s ease;
+/* ── ACTIVE MEMBER DISPLAY ALL MODE ── */
+#activeMemberDisplay.all-mode {
+    border-left-color: #fbbf24 !important;
+    background: rgba(251, 191, 36, 0.1) !important;
+}
+#activeMemberDisplay.all-mode #activeMemberName {
+    color: #fbbf24 !important;
 }
