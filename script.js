@@ -2368,7 +2368,7 @@ function renderLyrics() {
         activeDisplay.style.display = 'none';
     }
 
-    // ── RENDER LIRIK ──
+    // ── RENDER LIRIK (VERSI SIMPLIFIED, NO ZOOM) ──
     if (_lyricsData.length === 0) {
         container.innerHTML = '<div style="text-align:center;color:var(--text3);padding:30px 0;font-size:12px;">No lyrics loaded.<br>Upload a .lrc file or click 🔍 Search to fetch from online.</div>';
         return;
@@ -2379,40 +2379,23 @@ function renderLyrics() {
     var avgColor = isDuet ? getAverageColor(activeColors) : (activeColors[0] || '#ffffff');
     var isActive = activeMembers.length > 0 || _isAllMembersActive;
 
-    // ── CEK APAKAH STATE BERUBAH ──
-    var currentState = JSON.stringify({
-        activeIndex: _lyricsActiveIndex,
-        isAll: _isAllMembersActive,
-        activeMembers: activeMembers.slice().sort()
-    });
-
-    if (currentState === _lastRenderState && container._lastHtml === container.innerHTML) {
-        // Tidak ada perubahan, skip render
-        return;
-    }
-    _lastRenderState = currentState;
-
     var html = '';
     for (var i = 0; i < _lyricsData.length; i++) {
         var l = _lyricsData[i];
+        var isCurrent = (i === _lyricsActiveIndex);
         var cls = 'lyric-line';
         var style = '';
-        var isCurrent = (i === _lyricsActiveIndex);
 
         if (isCurrent && isActive) {
             cls += ' active';
-            var scale = isDuet ? 'scale(1.08)' : 'scale(1.1)';
-            var shadow = isDuet ? '0 0 20px ' + avgColor + '55' : '0 0 20px ' + activeColors[0] + '55';
-            var bgColor = isDuet ? avgColor + '33' : activeColors[0] + '33';
-            var borderColor = isDuet ? avgColor : activeColors[0];
-            
-            var allLabel = _isAllMembersActive ? ' <span style="color:#fbbf24;font-weight:700;font-size:11px;background:rgba(251,191,36,0.15);padding:2px 8px;border-radius:4px;margin-left:8px;">ALL</span>' : '';
-            
-            style = 'color:white; background:' + bgColor + '; border-left:3px solid ' + borderColor + '; transform:' + scale + '; box-shadow:' + shadow + '; padding:8px 14px; margin:6px 0; border-radius:8px; display:flex; align-items:center; gap:8px;';
+            // ── PAKAI CSS CLASS, BUKAN INLINE STYLE ──
+            // Biar CSS yang ngatur highlight & ALL label
+            var allLabel = _isAllMembersActive ? ' <span class="all-badge">ALL</span>' : '';
+            style = 'padding:6px 12px; margin:4px 0; border-radius:4px;';
             html += '<div class="' + cls + '" style="' + style + '" data-index="' + i + '">' + l.text + allLabel + '</div>';
         } else if (isCurrent && !isActive) {
             cls += ' active';
-            style = 'color:white; background:rgba(167,139,250,0.15); border-left:3px solid var(--purple); padding:4px 10px;';
+            style = 'padding:4px 10px;';
             html += '<div class="' + cls + '" style="' + style + '" data-index="' + i + '">' + l.text + '</div>';
         } else if (i < _lyricsActiveIndex) {
             cls += ' past';
@@ -2422,11 +2405,9 @@ function renderLyrics() {
         }
     }
     container.innerHTML = html;
-    container._lastHtml = html;
 }
 
 function updateLyricsOnHold() {
-    var current = getCurrentPlayerTime();
     if (_lyricsData.length === 0) return;
 
     var hasActive = false;
@@ -2436,6 +2417,7 @@ function updateLyricsOnHold() {
 
     if (!hasActive && !_isAllMembersActive) return;
 
+    var current = getCurrentPlayerTime();
     var newIndex = -1;
     for (var i = 0; i < _lyricsData.length; i++) {
         if (current >= _lyricsData[i].time) {
