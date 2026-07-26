@@ -2783,6 +2783,7 @@ function stopPlayer() {
     updatePlayheadUI();
     updateMediaProgress();
     
+    // Stop semua member yang sedang hold
     var names = Object.keys(memberIntervals);
     for (var i = 0; i < names.length; i++) {
         var n = names[i];
@@ -2790,6 +2791,7 @@ function stopPlayer() {
             clearInterval(memberIntervals[n]);
             memberIntervals[n] = null;
         }
+        // Hentikan rekaman di timeline
         var clip = timelineData.find(function(c) { return c.member === n && c.end === 0; });
         if (clip) {
             clip.end = getCurrentPlayerTime();
@@ -2797,6 +2799,7 @@ function stopPlayer() {
         }
     }
     
+    // Reset recording state
     if (_isRecording) {
         _recordingMembers = {};
     }
@@ -2822,6 +2825,7 @@ function seekPlayer(seconds) {
     var duration = getPlayerDuration();
     if (newTime > duration) newTime = duration;
     
+    // Set posisi player
     if (ytPlayer && ytPlayer.seekTo) {
         ytPlayer.seekTo(newTime, true);
     } else if (vid.style.display !== 'none' && vid.src) {
@@ -2830,10 +2834,22 @@ function seekPlayer(seconds) {
         aud.currentTime = newTime;
     }
     
+    // Sinkronkan playhead
     playheadPx = newTime * pxPerSec;
     updatePlayheadUI();
     updateMediaProgress();
     
+    // ⭐ PERBAIKAN: Update posisi start untuk member yang sedang hold
+    var names = Object.keys(memberIntervals);
+    for (var i = 0; i < names.length; i++) {
+        var n = names[i];
+        if (memberIntervals[n]) {
+            // Update startTime ke posisi baru agar rekaman berlanjut dari sini
+            memberStartTime[n] = newTime;
+        }
+    }
+    
+    // Update timeline jika visible
     if (document.getElementById('resultModal').style.display === 'flex') {
         updateTimelineProgress(newTime);
     }
