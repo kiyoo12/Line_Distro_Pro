@@ -332,68 +332,65 @@ function renderStripItem(n, c, p, index) {
     }
 
     function startHold() {
-    if (memberIntervals[n]) return;
-    
-    // Jika REC aktif, catat member yang di-hold
-    if (_isRecording) {
-        _recordingMembers[n] = true;
+        if (memberIntervals[n]) return;
+        
+        // Jika REC aktif, catat member yang di-hold
+        if (_isRecording) {
+            _recordingMembers[n] = true;
+        }
+        
+        item.classList.add('holding');
+        spawnRipple();
+        rippleInterval = setInterval(spawnRipple, 550);
+        var startDuration = memberDurations[n] || 0;
+        memberStartTime[n] = getCurrentPlayerTime();
+        
+        // ⭐ PERBAIKAN: Hitung durasi dari memberStartTime
+        memberIntervals[n] = setInterval(function() {
+            var currentTime = getCurrentPlayerTime();
+            var newDuration = currentTime - memberStartTime[n];
+            if (newDuration < 0) newDuration = 0;
+            memberDurations[n] = startDuration + newDuration;
+            timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
+            updateLeaderboardLive();
+            updateTotalDuration();
+            updatePresentationLive();
+            reorderLeaderboard();
+        }, 50);
+        saveStateForUndo();
     }
-    
-    item.classList.add('holding');
-    spawnRipple();
-    rippleInterval = setInterval(spawnRipple, 550);
-    var startTime = Date.now();
-    var startDuration = memberDurations[n] || 0;
-    memberStartTime[n] = getCurrentPlayerTime();
-    
-    memberIntervals[n] = setInterval(function() {
-        var elapsed = (Date.now() - startTime) / 1000;
-        // ⭐ PERBAIKAN: Gunakan memberStartTime untuk hitung durasi
-        // Agar saat skip, durasi reset ke posisi baru
-        var currentTime = getCurrentPlayerTime();
-        var newDuration = currentTime - memberStartTime[n];
-        if (newDuration < 0) newDuration = 0;
-        memberDurations[n] = startDuration + newDuration;
-        timeLabel.textContent = memberDurations[n].toFixed(1) + 's';
-        updateLeaderboardLive();
-        updateTotalDuration();
-        updatePresentationLive();
-        reorderLeaderboard();
-    }, 50);
-    saveStateForUndo();
-}
 
     function stopHold() {
-    if (!memberIntervals[n]) return;
-    clearInterval(memberIntervals[n]);
-    memberIntervals[n] = null;
-    clearInterval(rippleInterval);
-    rippleInterval = null;
-    item.classList.remove('holding');
-    
-    var endTime = getCurrentPlayerTime();
-    var start = memberStartTime[n] || 0;
-    // ⭐ PERBAIKAN: Durasi = endTime - start (bukan memberDurations[n])
-    var dur = endTime - start;
-    if (dur > 0.1) {
-        timelineData.push({
-            member: n,
-            start: start,
-            end: endTime,
-            duration: dur
-        });
+        if (!memberIntervals[n]) return;
+        clearInterval(memberIntervals[n]);
+        memberIntervals[n] = null;
+        clearInterval(rippleInterval);
+        rippleInterval = null;
+        item.classList.remove('holding');
+        
+        var endTime = getCurrentPlayerTime();
+        var start = memberStartTime[n] || 0;
+        var dur = endTime - start; // ⭐ Hitung dari start
+        
+        if (dur > 0.1) {
+            timelineData.push({
+                member: n,
+                start: start,
+                end: endTime,
+                duration: dur
+            });
+        }
+        
+        // Jika REC aktif, hapus dari recording members
+        if (_isRecording) {
+            delete _recordingMembers[n];
+        }
+        
+        updateLeaderboardLive();
+        reorderLeaderboard();
+        updatePresentationLive();
+        saveStateForUndo();
     }
-    
-    // Jika REC aktif, hapus dari recording members
-    if (_isRecording) {
-        delete _recordingMembers[n];
-    }
-    
-    updateLeaderboardLive();
-    reorderLeaderboard();
-    updatePresentationLive();
-    saveStateForUndo();
-}
 
     item.addEventListener('mousedown', startHold);
     item.addEventListener('mouseup', stopHold);
@@ -2591,7 +2588,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ══════════════════════════════════════════
-//  RECORDING MODE (REC Button) - DITARUH DI ATAS MEMBER STRIP
+//  RECORDING MODE (REC Button)
 // ══════════════════════════════════════════
 function toggleRecording() {
     _isRecording = !_isRecording;
@@ -2633,15 +2630,31 @@ function toggleRecording() {
             _recTimerInterval = null;
         }
         
+        // Stop semua member yang sedang hold
         for (var n in _recordingMembers) {
             if (memberIntervals[n]) {
                 clearInterval(memberIntervals[n]);
                 memberIntervals[n] = null;
-            }
-            var clip = timelineData.find(function(c) { return c.member === n && c.end === 0; });
-            if (clip) {
-                clip.end = getCurrentPlayerTime();
-                clip.duration = clip.end - clip.start;
+                // Hentikan rekaman di timeline
+                var endTime = getCurrentPlayerTime();
+                var start = memberStartTime[n] || 0;
+                var dur = endTime - start;
+                if (dur > 0.1) {
+                    timelineData.push({
+                        member: n,
+                        start: start,
+                        end: endTime,
+                        duration: dur
+                    });
+                }
+                // Reset UI
+                var stripItems = document.querySelectorAll('.strip-item');
+                for (var j = 0; j < stripItems.length; j++) {
+                    if (stripItems[j].dataset.name === n) {
+                        stripItems[j].classList.remove('holding');
+                        break;
+                    }
+                }
             }
         }
         _recordingMembers = {};
@@ -2657,7 +2670,7 @@ function toggleRecording() {
 }
 
 // ══════════════════════════════════════════
-//  MUTE DETECTOR (dari Perchance)
+//  MUTE DETECTOR
 // ══════════════════════════════════════════
 function openMuteDetector() {
     var names = Object.keys(memberDurations);
@@ -2819,7 +2832,7 @@ function stopPlayer() {
 }
 
 // ══════════════════════════════════════════
-//  UPDATE SEEK PLAYER (Sinkronisasi dengan timeline)
+//  SEEK PLAYER (Skip -10/-5/+5/+10) - Reset bar saat REC aktif
 // ══════════════════════════════════════════
 function seekPlayer(seconds) {
     var vid = document.getElementById('localMedia');
@@ -2845,9 +2858,19 @@ function seekPlayer(seconds) {
     updatePlayheadUI();
     updateMediaProgress();
     
-    // ⭐ HAPUS bagian ini! Jangan update memberStartTime
-    // Biarkan rekaman tetap berjalan dari posisi baru
-    // Tapi bar grafik akan reset karena memberStartTime tidak berubah
+    // ⭐⭐ PERBAIKAN UTAMA: Reset memberStartTime saat skip (HANYA jika REC aktif)
+    // Ini membuat bar grafik RESET ke posisi baru, bukan lanjut dari sebelumnya
+    if (_isRecording) {
+        var names = Object.keys(memberIntervals);
+        for (var i = 0; i < names.length; i++) {
+            var n = names[i];
+            if (memberIntervals[n]) {
+                // Reset startTime ke posisi baru agar bar reset
+                memberStartTime[n] = newTime;
+                // memberDurations tetap, tapi durasi akan dihitung ulang dari newTime
+            }
+        }
+    }
     
     // Update timeline jika visible
     if (document.getElementById('resultModal').style.display === 'flex') {
