@@ -91,14 +91,17 @@ function showFileName(input, labelId, defaultText) {
 // ══════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════
-// Di bagian STATE (awal file)
-var _lastRenderState = ''; // tambahkan ini
 var memberList = document.getElementById('memberList');
+var memberStrip = document.getElementById('memberStrip');
 var memberDurations = {};
 var memberColors = {};
 var memberPhotos = {};
 var memberIntervals = {};
 var chartInstance = null;
+
+// ── TIMELINE STATE ──
+var pxPerSec = 40;
+var playheadPx = 0;
 
 // ── FITUR ──
 var memberStartTime = {};
@@ -113,7 +116,7 @@ var _timelineInterval = null;
 var _currentVolume = 0.8;
 
 // ── TAB MODE ──
-var _isAllMembersActive = false; // untuk toggle ALL di LYRICS
+var _isAllMembersActive = false;
 
 // ── AD-LIBS HOLD ──
 var activeAdLibKeys = new Set();
@@ -124,6 +127,12 @@ var AD_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
 var _lyricsData = [];
 var _lyricsActiveIndex = -1;
 var _lyricsUpdateInterval = null;
+
+// ── REC STATE ──
+var _isRecording = false;
+var _recStartTime = 0;
+var _recTimerInterval = null;
+var _recordingMembers = {};
 
 // ══════════════════════════════════════════
 //  DUET / GROUP SINGING HELPER
@@ -149,9 +158,7 @@ function getGradientForActive(colors) {
 function getAverageColor(colors) {
     if (!colors || colors.length === 0) return '#a78bfa';
     if (colors.length === 1) return colors[0];
-    var r = 0,
-        g = 0,
-        b = 0;
+    var r = 0, g = 0, b = 0;
     for (var i = 0; i < colors.length; i++) {
         var hex = colors[i].replace('#', '');
         var bigint = parseInt(hex, 16);
@@ -293,10 +300,8 @@ document.getElementById('promptInput').addEventListener('keydown', function(e) {
 });
 
 // ══════════════════════════════════════════
-//  1. RENDER MEMBER STRIP
+//  RENDER MEMBER STRIP (VERSI DENGAN REC)
 // ══════════════════════════════════════════
-var memberStrip = document.getElementById('memberStrip');
-
 function renderStripItem(n, c, p, index) {
     var item = document.createElement('div');
     item.className = 'strip-item';
@@ -328,12 +333,19 @@ function renderStripItem(n, c, p, index) {
 
     function startHold() {
         if (memberIntervals[n]) return;
+        
+        // Jika REC aktif, catat member yang di-hold
+        if (_isRecording) {
+            _recordingMembers[n] = true;
+        }
+        
         item.classList.add('holding');
         spawnRipple();
         rippleInterval = setInterval(spawnRipple, 550);
         var startTime = Date.now();
         var startDuration = memberDurations[n] || 0;
         memberStartTime[n] = getCurrentPlayerTime();
+        
         memberIntervals[n] = setInterval(function() {
             var elapsed = (Date.now() - startTime) / 1000;
             memberDurations[n] = startDuration + elapsed;
@@ -353,6 +365,7 @@ function renderStripItem(n, c, p, index) {
         clearInterval(rippleInterval);
         rippleInterval = null;
         item.classList.remove('holding');
+        
         var endTime = getCurrentPlayerTime();
         var start = memberStartTime[n] || 0;
         var dur = memberDurations[n] || 0;
@@ -364,6 +377,12 @@ function renderStripItem(n, c, p, index) {
                 duration: dur
             });
         }
+        
+        // Jika REC aktif, hapus dari recording members
+        if (_isRecording) {
+            delete _recordingMembers[n];
+        }
+        
         updateLeaderboardLive();
         reorderLeaderboard();
         updatePresentationLive();
@@ -398,7 +417,7 @@ function renderMemberCard(n, c, p, d) {
     card.style.borderLeftColor = c;
     card.style.setProperty('--pulse-color', c + '66');
     card.dataset.name = n;
-    card.innerHTML = '\n        <div class="member-card-inner">\n            <span class="rank-num">1</span>\n            <img src="' + p + '" class="member-avatar"\n                 style="border-color:' + c + '; box-shadow:0 0 10px 2px ' + c + '44; transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color 0.5s ease;"\n                 onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            <div class="member-text">\n                <div class="member-name-row">\n                    <span class="member-name">' + n + '</span>\n                    <div class="member-time-wrap">\n                        <span class="rec-dot" style="margin-right:4px;"></span>\n                        <span class="member-time" id="time-' + CSS.escape(n) + '">' + d.toFixed(1) + 's</span>\n                    </div>\n                </div>\n                <div class="member-bar-wrap">\n                    <div class="member-bar" id="bar-' + CSS.escape(n) + '"\n                         style="background:linear-gradient(90deg,' + c + '88,' + c + '); transform:scaleX(0); transition: transform 0.15s linear, background 0.3s ease, box-shadow 0.3s ease;"></div>\n                </div>\n            </div>\n            <div class="member-actions">\n                <button class="btn-sm" onclick="resetMember(\'' + n + '\')" title="Reset">↺</button>\n                <button class="btn-sm del" onclick="confirmDeleteMember(\'' + n + '\')" title="Delete">✕</button>\n            </div>\n        </div>';
+    card.innerHTML = '\n        <div class="member-card-inner">\n            <span class="rank-num">1</span>\n            <img src="' + p + '" class="member-avatar"\n                 style="border-color:' + c + '; box-shadow:0 0 10px 2px ' + c + '44; transition: transform 0.5s cubic-bezier(0.34, 1.3, 0.4, 1), box-shadow 0.4s ease, border-color 0.3s ease;"\n                 onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=random\'">\n            <div class="member-text">\n                <div class="member-name-row">\n                    <span class="member-name">' + n + '</span>\n                    <div class="member-time-wrap">\n                        <span class="rec-dot" style="margin-right:4px;"></span>\n                        <span class="member-time" id="time-' + CSS.escape(n) + '">' + d.toFixed(1) + 's</span>\n                    </div>\n                </div>\n                <div class="member-bar-wrap">\n                    <div class="member-bar" id="bar-' + CSS.escape(n) + '"\n                         style="background:linear-gradient(90deg,' + c + '88,' + c + '); transform:scaleX(0); transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), background 0.3s ease, box-shadow 0.3s ease;"></div>\n                </div>\n            </div>\n            <div class="member-actions">\n                <button class="btn-sm" onclick="resetMember(\'' + n + '\')" title="Reset">↺</button>\n                <button class="btn-sm del" onclick="confirmDeleteMember(\'' + n + '\')" title="Delete">✕</button>\n            </div>\n        </div>';
     return card;
 }
 
@@ -486,7 +505,7 @@ function updateLeaderboardLive() {
             }
             if (avatar) {
                 if (_avatarState[n] !== 'inactive') {
-                    avatar.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-color 0.5s ease';
+                    avatar.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.3, 0.4, 1), box-shadow 0.4s ease, border-color 0.3s ease';
                     avatar.style.transform = 'scale(1)';
                     avatar.style.borderColor = c;
                     avatar.style.boxShadow = '0 0 10px 2px ' + c + '44';
@@ -575,7 +594,7 @@ function reorderLeaderboard() {
             requestAnimationFrame(function(cardRef) {
                 return function() {
                     requestAnimationFrame(function() {
-                        cardRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        cardRef.style.transition = 'transform 0.8s cubic-bezier(0.2, 1, 0.3, 1)';
                         cardRef.style.transform = '';
                         setTimeout(function() { cardRef.style.transition = '';
                             cardRef.style.transform = ''; }, 600);
@@ -1152,31 +1171,6 @@ function togglePlayerPlayback() {
     }
 }
 
-function seekPlayer(seconds) {
-    var vid = document.getElementById('localMedia');
-    var aud = document.getElementById('audioPlayer');
-    if (window.ytPlayer && window.ytPlayer.getCurrentTime) {
-        var current = window.ytPlayer.getCurrentTime() || 0;
-        var newTime = Math.max(0, current + seconds);
-        var duration = window.ytPlayer.getDuration() || 0;
-        if (newTime > duration) newTime = duration;
-        window.ytPlayer.seekTo(newTime, true);
-        return;
-    }
-    if (vid.style.display !== 'none' && vid.src) {
-        var newVidTime = Math.max(0, vid.currentTime + seconds);
-        if (newVidTime > vid.duration) newVidTime = vid.duration;
-        vid.currentTime = newVidTime;
-        return;
-    }
-    if (aud.style.display !== 'none' && aud.src) {
-        var newAudTime = Math.max(0, aud.currentTime + seconds);
-        if (newAudTime > aud.duration) newAudTime = aud.duration;
-        aud.currentTime = newAudTime;
-        return;
-    }
-}
-
 // ══════════════════════════════════════════
 //  FAIRNESS (Gini Coefficient)
 // ══════════════════════════════════════════
@@ -1562,7 +1556,7 @@ var activeKeyHolds = new Set();
 document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    // ── TAB = TOGGLE "ALL" DI LYRICS (tanpa nambah durasi) ──
+    // ── TAB = TOGGLE "ALL" DI LYRICS ──
     if (e.key === 'Tab') {
         e.preventDefault();
         _isAllMembersActive = !_isAllMembersActive;
@@ -2302,7 +2296,7 @@ function reorderPresentationBars() {
             requestAnimationFrame(function(rowRef) {
                 return function() {
                     requestAnimationFrame(function() {
-                        rowRef.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        rowRef.style.transition = 'transform 0.8s cubic-bezier(0.2, 1, 0.3, 1)';
                         rowRef.style.transform = '';
                         setTimeout(function() { rowRef.style.transition = '';
                             rowRef.style.transform = ''; }, 600);
@@ -2331,7 +2325,6 @@ function renderLyrics() {
     var activeName = document.getElementById('activeMemberName');
     var activeLyrics = document.getElementById('activeMemberLyrics');
 
-    // ── UPDATE ACTIVE MEMBER DISPLAY ──
     if (_isAllMembersActive) {
         activeDisplay.style.display = 'flex';
         activeDisplay.style.borderLeftColor = '#fbbf24';
@@ -2368,7 +2361,6 @@ function renderLyrics() {
         activeDisplay.style.display = 'none';
     }
 
-    // ── RENDER LIRIK (VERSI SIMPLIFIED, NO ZOOM) ──
     if (_lyricsData.length === 0) {
         container.innerHTML = '<div style="text-align:center;color:var(--text3);padding:30px 0;font-size:12px;">No lyrics loaded.<br>Upload a .lrc file or click 🔍 Search to fetch from online.</div>';
         return;
@@ -2388,8 +2380,6 @@ function renderLyrics() {
 
         if (isCurrent && isActive) {
             cls += ' active';
-            // ── PAKAI CSS CLASS, BUKAN INLINE STYLE ──
-            // Biar CSS yang ngatur highlight & ALL label
             var allLabel = _isAllMembersActive ? ' <span class="all-badge">ALL</span>' : '';
             style = 'padding:6px 12px; margin:4px 0; border-radius:4px;';
             html += '<div class="' + cls + '" style="' + style + '" data-index="' + i + '">' + l.text + allLabel + '</div>';
@@ -2593,6 +2583,274 @@ document.addEventListener('DOMContentLoaded', function() {
         showToast('✅ Timestamp set untuk baris ke-' + (index + 1));
     });
 });
+
+// ══════════════════════════════════════════
+//  RECORDING MODE (REC Button) - DITARUH DI ATAS MEMBER STRIP
+// ══════════════════════════════════════════
+function toggleRecording() {
+    _isRecording = !_isRecording;
+    var btn = document.getElementById('recBtn');
+    var dot = document.getElementById('recDot');
+    var status = document.getElementById('recStatus');
+    var recTime = document.getElementById('recTime');
+    
+    if (_isRecording) {
+        btn.style.background = '#ff4444';
+        btn.style.boxShadow = '0 0 20px rgba(255,68,68,0.5)';
+        dot.style.background = '#ff4444';
+        dot.style.boxShadow = '0 0 10px rgba(255,68,68,0.8)';
+        dot.style.animation = 'recBlink 0.8s ease-in-out infinite';
+        status.textContent = '🔴 RECORDING';
+        status.style.color = '#ff4444';
+        _recStartTime = Date.now();
+        _recordingMembers = {};
+        
+        if (_recTimerInterval) clearInterval(_recTimerInterval);
+        _recTimerInterval = setInterval(function() {
+            var elapsed = (Date.now() - _recStartTime) / 1000;
+            recTime.textContent = formatTime(elapsed);
+        }, 100);
+        
+        showToast('🔴 Recording started — hold members to record!');
+    } else {
+        btn.style.background = '#ff4444';
+        btn.style.boxShadow = 'none';
+        dot.style.background = '#fff';
+        dot.style.boxShadow = 'none';
+        dot.style.animation = 'none';
+        status.textContent = 'IDLE';
+        status.style.color = 'var(--text3)';
+        recTime.textContent = '00:00.0';
+        
+        if (_recTimerInterval) {
+            clearInterval(_recTimerInterval);
+            _recTimerInterval = null;
+        }
+        
+        for (var n in _recordingMembers) {
+            if (memberIntervals[n]) {
+                clearInterval(memberIntervals[n]);
+                memberIntervals[n] = null;
+            }
+            var clip = timelineData.find(function(c) { return c.member === n && c.end === 0; });
+            if (clip) {
+                clip.end = getCurrentPlayerTime();
+                clip.duration = clip.end - clip.start;
+            }
+        }
+        _recordingMembers = {};
+        
+        reorderLeaderboard();
+        updateLeaderboardLive();
+        updatePresentationLive();
+        saveStateForUndo();
+        
+        var count = Object.keys(memberDurations).filter(function(n) { return memberDurations[n] > 0; }).length;
+        showToast('⏹ Recording stopped — ' + count + ' members recorded');
+    }
+}
+
+// ══════════════════════════════════════════
+//  MUTE DETECTOR (dari Perchance)
+// ══════════════════════════════════════════
+function openMuteDetector() {
+    var names = Object.keys(memberDurations);
+    if (names.length === 0) { showToast('⚠️ No members yet'); return; }
+    
+    var modal = document.createElement('div');
+    modal.id = 'muteDetectorModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;';
+    
+    var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;width:100%;max-width:420px;max-height:80vh;overflow-y:auto;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    html += '<h3 style="color:var(--text);font-family:Space Grotesk,sans-serif;font-size:16px;">🔇 MUTE DETECTOR</h3>';
+    html += '<button onclick="closeMuteDetector()" style="background:transparent;border:none;color:var(--text2);font-size:20px;cursor:pointer;">✕</button>';
+    html += '</div>';
+    html += '<p style="color:var(--text2);font-size:12px;margin-bottom:16px;line-height:1.6;">Enter the sung-time (seconds) when a member should be muted.<br>They will be muted from that point until the end of the song.</p>';
+    
+    for (var i = 0; i < names.length; i++) {
+        var n = names[i];
+        var c = memberColors[n] || '#a78bfa';
+        html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg3);border-radius:8px;border-left:3px solid ' + c + ';">';
+        html += '<span style="font-weight:600;font-size:13px;min-width:80px;color:var(--text);">' + n + '</span>';
+        html += '<input type="number" step="0.1" min="0" id="mute-input-' + n + '" placeholder="0.0" style="flex:1;height:32px;padding:0 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;">';
+        html += '<button onclick="addMuteEntry(\'' + n + '\')" style="height:32px;padding:0 12px;background:#ff4444;color:#fff;border:none;border-radius:4px;font-weight:600;font-size:11px;cursor:pointer;">MUTE</button>';
+        html += '</div>';
+    }
+    
+    html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">';
+    html += '<p style="color:var(--text3);font-size:11px;">Muted entries will appear in timeline with red color.</p>';
+    html += '</div>';
+    html += '</div>';
+    
+    modal.innerHTML = html;
+    document.body.appendChild(modal);
+    
+    setTimeout(function() {
+        var firstInput = modal.querySelector('input[type="number"]');
+        if (firstInput) firstInput.focus();
+    }, 100);
+}
+
+function closeMuteDetector() {
+    var modal = document.getElementById('muteDetectorModal');
+    if (modal) modal.remove();
+}
+
+function addMuteEntry(memberName) {
+    var input = document.getElementById('mute-input-' + memberName);
+    if (!input) return;
+    var targetSecs = parseFloat(input.value);
+    if (isNaN(targetSecs) || targetSecs <= 0) {
+        showToast('⚠️ Enter a valid number');
+        input.style.borderColor = '#ff4444';
+        setTimeout(function() { input.style.borderColor = ''; }, 1000);
+        return;
+    }
+    
+    var duration = getPlayerDuration();
+    if (duration <= 0) {
+        showToast('⚠️ Load a media file first');
+        return;
+    }
+    
+    var triggerTime = findTimelineTimeForSungSeconds(memberName, targetSecs);
+    if (triggerTime === null) {
+        showToast('⚠️ ' + memberName + ' never reaches ' + targetSecs.toFixed(1) + 's');
+        return;
+    }
+    
+    timelineData.push({
+        member: memberName,
+        start: triggerTime,
+        end: duration,
+        duration: duration - triggerTime,
+        isMute: true
+    });
+    
+    input.value = '';
+    showToast('🔇 ' + memberName + ' muted at ' + targetSecs.toFixed(1) + 's (timeline: ' + formatTime(triggerTime) + ')');
+    
+    if (document.getElementById('resultModal').style.display === 'flex') {
+        updateTimelineProgress(getCurrentPlayerTime());
+    }
+    
+    reloadMemberList();
+    updateLeaderboardLive();
+    saveStateForUndo();
+}
+
+function findTimelineTimeForSungSeconds(memberName, targetSeconds) {
+    var cumulative = 0;
+    var sorted = timelineData.slice().sort(function(a, b) { return a.start - b.start; });
+    
+    for (var i = 0; i < sorted.length; i++) {
+        var c = sorted[i];
+        if (c.member === memberName && !c.isMute) {
+            if (cumulative + c.duration >= targetSeconds) {
+                return c.start + (targetSeconds - cumulative);
+            }
+            cumulative += c.duration;
+        }
+    }
+    return null;
+}
+
+// ══════════════════════════════════════════
+//  STOP PLAYER (Reset posisi ke 0)
+// ══════════════════════════════════════════
+function stopPlayer() {
+    var vid = document.getElementById('localMedia');
+    var aud = document.getElementById('audioPlayer');
+    var ytPlayer = window.ytPlayer;
+    
+    if (vid && vid.style.display !== 'none' && vid.src) {
+        vid.pause();
+        vid.currentTime = 0;
+    }
+    if (aud && aud.style.display !== 'none' && aud.src) {
+        aud.pause();
+        aud.currentTime = 0;
+    }
+    if (ytPlayer && ytPlayer.pauseVideo && ytPlayer.seekTo) {
+        try {
+            ytPlayer.pauseVideo();
+            ytPlayer.seekTo(0, true);
+        } catch(e) {}
+    }
+    
+    playheadPx = 0;
+    updatePlayheadUI();
+    updateMediaProgress();
+    
+    var names = Object.keys(memberIntervals);
+    for (var i = 0; i < names.length; i++) {
+        var n = names[i];
+        if (memberIntervals[n]) {
+            clearInterval(memberIntervals[n]);
+            memberIntervals[n] = null;
+        }
+        var clip = timelineData.find(function(c) { return c.member === n && c.end === 0; });
+        if (clip) {
+            clip.end = getCurrentPlayerTime();
+            clip.duration = clip.end - clip.start;
+        }
+    }
+    
+    if (_isRecording) {
+        _recordingMembers = {};
+    }
+    
+    updateLeaderboardLive();
+    reorderLeaderboard();
+    updatePresentationLive();
+    saveStateForUndo();
+    
+    showToast('⏹ Player stopped & reset');
+}
+
+// ══════════════════════════════════════════
+//  UPDATE SEEK PLAYER (Sinkronisasi dengan timeline)
+// ══════════════════════════════════════════
+function seekPlayer(seconds) {
+    var vid = document.getElementById('localMedia');
+    var aud = document.getElementById('audioPlayer');
+    var ytPlayer = window.ytPlayer;
+    
+    var currentTime = getCurrentPlayerTime();
+    var newTime = Math.max(0, currentTime + seconds);
+    var duration = getPlayerDuration();
+    if (newTime > duration) newTime = duration;
+    
+    if (ytPlayer && ytPlayer.seekTo) {
+        ytPlayer.seekTo(newTime, true);
+    } else if (vid.style.display !== 'none' && vid.src) {
+        vid.currentTime = newTime;
+    } else if (aud.style.display !== 'none' && aud.src) {
+        aud.currentTime = newTime;
+    }
+    
+    playheadPx = newTime * pxPerSec;
+    updatePlayheadUI();
+    updateMediaProgress();
+    
+    if (document.getElementById('resultModal').style.display === 'flex') {
+        updateTimelineProgress(newTime);
+    }
+}
+
+// ── UPDATE PLAYHEAD UI ──
+function updatePlayheadUI() {
+    var playhead = document.getElementById('playhead');
+    if (playhead) {
+        playhead.style.left = playheadPx + 'px';
+    }
+    var timer = document.getElementById('timeline-timer');
+    if (timer) {
+        var t = playheadPx / pxPerSec;
+        timer.textContent = formatTime(t);
+    }
+}
 
 // ══════════════════════════════════════════
 //  10. INIT
