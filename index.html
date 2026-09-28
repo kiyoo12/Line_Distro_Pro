@@ -287,8 +287,19 @@
     </div>
 </div>
 
-<script src="https://www.youtube.com/iframe_api"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="script.js"></script>
+  <!-- 1. Pustaka Luar (External Libraries) — Harus Dimuat Paling Pertama -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- 2. Modul Hasil Pemisahan Kita (Modular Files) -->
+    <script src="js/state.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/media.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/features.js"></script>
+    <script src="js/lyrics.js"></script>
+
+    <!-- 3. Otak Utama Aplikasi — Harus Berada di Paling Akhir -->
+    <script src="script.js"></script>
 </body>
 </html>
